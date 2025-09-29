@@ -3,6 +3,7 @@
 A minimal, extensible TypeScript tool to convert GenoPro `.gno` files to GEDCOM `.ged`.
 
 Features:
+
 - Automatically detects and decompresses gzip/zlib/zip-packed `.gno` files
 - Parses the resulting XML and maps it heuristically to a simple internal model
 - Emits GEDCOM 5.5.1 with basic records (INDI, FAM, NAME, SEX, BIRT/DEAT with DATE/PLAC, FAMC/FAMS)
@@ -21,10 +22,11 @@ npm run build
 
 ```bash
 # Convert .GNO to .GED
-npx gno-to-ged input.gno -o output.ged
+npx gno-to-ged -i input.gno -o output.ged
 ```
 
 During development (without building):
+
 ```bash
 npm run dev -- input.gno -o output.ged
 ```
