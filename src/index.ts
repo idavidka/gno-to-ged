@@ -1,0 +1,1 @@
+export { gnoToGed } from "./lib/gno-to-ged.js";

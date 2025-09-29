@@ -1,0 +1,1 @@
+[ide illesztjük a korábban küldött, angol kommentekkel és modernizálással frissített változatot]
