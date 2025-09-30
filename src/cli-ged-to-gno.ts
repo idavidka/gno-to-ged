@@ -31,8 +31,9 @@ if (!argv.in) {
 }
 
 try {
-  const gno = await gedToGno(argv.in as string);
-  await fs.writeFile(argv.out as string, gno, "utf8");
+  const gedText = await fs.readFile(argv.in as string, "utf8");
+  const gno = await gedToGno(gedText);
+  await fs.writeFile(argv.out as string, gno);
   console.log(`Done: ${path.resolve(argv.out as string)}`);
 } catch (e) {
   console.error("Conversion failed:", e instanceof Error ? e.message : e);
