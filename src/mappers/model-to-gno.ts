@@ -1,17 +1,26 @@
 import { XMLBuilder } from "fast-xml-parser";
-import type { Family, Person } from "../model.js";
+import type { Family, Person, Place, Source } from "../model.js";
 
-function eventToNode(ev: { type: string; date?: string; place?: string }) {
+function eventToNode(ev: { type: string; date?: string; place?: string; placeId?: string }) {
   const tag = ev.type === "BIRT" ? "Birth" : ev.type === "DEAT" ? "Death" : ev.type;
   const attrs: any = {};
   if (ev.date) attrs["@_Date"] = ev.date;
-  if (ev.place) attrs["@_Place"] = ev.place;
+  // Prefer placeId reference over plain text place
+  if (ev.placeId) attrs["@_Place"] = ev.placeId;
+  else if (ev.place) attrs["@_Place"] = ev.place;
   return { [tag]: attrs };
 }
 
-// Egy egyszerű, konzisztens GNO XML (nem garantált 1:1 GenoPro séma, de jól mappolható)
-export function modelToGnoXml(persons: Person[], families: Family[]): string {
-  const root: any = { Genealogy: { Individuals: { Individual: [] as any[] }, Families: { Family: [] as any[] } } };
+// Simple, consistent GNO XML (not guaranteed 1:1 GenoPro schema, but well-mappable)
+export function modelToGnoXml(persons: Person[], families: Family[], places: Place[] = [], sources: Source[] = []): string {
+  const root: any = { 
+    Genealogy: { 
+      Individuals: { Individual: [] as any[] }, 
+      Families: { Family: [] as any[] },
+      Places: { Place: [] as any[] },
+      Sources: { Source: [] as any[] }
+    } 
+  };
 
   for (const p of persons) {
     const node: any = { "@_ID": p.id };
@@ -33,6 +42,21 @@ export function modelToGnoXml(persons: Person[], families: Family[]): string {
       node.Children = { Child: f.chil.map(id => ({ "@_Ref": id })) };
     }
     root.Genealogy.Families.Family.push(node);
+  }
+
+  for (const place of places) {
+    const node: any = { "@_ID": place.id, "@_Name": place.name };
+    if (place.lat) node["@_Lat"] = place.lat;
+    if (place.long) node["@_Long"] = place.long;
+    root.Genealogy.Places.Place.push(node);
+  }
+
+  for (const source of sources) {
+    const node: any = { "@_ID": source.id };
+    if (source.title) node["@_Title"] = source.title;
+    if (source.author) node["@_Author"] = source.author;
+    if (source.publication) node["@_Publication"] = source.publication;
+    root.Genealogy.Sources.Source.push(node);
   }
 
   const builder = new XMLBuilder({

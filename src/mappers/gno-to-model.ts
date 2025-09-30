@@ -1,5 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
-import type { Family, Person } from "../model.js";
+import type { Family, Person, Place, Source } from "../model.js";
 
 /**
  * Heuristic GNO XML → internal model mapper.
@@ -8,15 +8,19 @@ import type { Family, Person } from "../model.js";
  * - Root: GenoPro | Genealogy | genealogy | (fallback: parsed root)
  * - Individuals container: Individuals | Persons | individuals | persons
  * - Families container: Families | Unions | families | unions
+ * - Places container: Places | places
+ * - Sources container: Sources | sources
  *
  * Tries common element/attribute names:
  * - Individual/Person nodes with @ID/Id/id, @Name/Name/DisplayName/FullName, @Sex/Sex
  * - Family/Union nodes with @ID and @Husband/@Wife; children under Children/Child[@Ref]
  * - Birth/Death sub-nodes with @Date/@Place
+ * - Place nodes with @ID and @Name/@Title
+ * - Source nodes with @ID and @Title/@Author/@Publication
  *
  * This is a starting point; adjust the mappings for your exact .gno schema.
  */
-export function gnoToModel(xmlText: string): { persons: Person[]; families: Family[] } {
+export function gnoToModel(xmlText: string): { persons: Person[]; families: Family[]; places: Place[]; sources: Source[] } {
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: "@_",
@@ -53,6 +57,42 @@ export function gnoToModel(xmlText: string): { persons: Person[]; families: Fami
     Array.isArray(familiesContainer?.Union) ? familiesContainer.Union :
     familiesContainer?.Union ? [familiesContainer.Union] : []) as any[];
 
+  // Resolve places container
+  const placesContainer =
+    rootObj.Places ?? rootObj.places;
+
+  // Normalize places to an array
+  const rawPlaces: any[] =
+    (Array.isArray(placesContainer?.Place) ? placesContainer.Place :
+    placesContainer?.Place ? [placesContainer.Place] : []) as any[];
+
+  // Resolve sources container
+  const sourcesContainer =
+    rootObj.Sources ?? rootObj.sources;
+
+  // Normalize sources to an array
+  const rawSources: any[] =
+    (Array.isArray(sourcesContainer?.Source) ? sourcesContainer.Source :
+    sourcesContainer?.Source ? [sourcesContainer.Source] : []) as any[];
+
+  // Parse places
+  const places: Place[] = rawPlaces.map((node, idx) => {
+    const id = node?.["@_ID"] ?? node?.["@_Id"] ?? node?.["@_id"] ?? `P${idx + 1}`;
+    const name = node?.["@_Name"] ?? node?.Name ?? node?.["@_Title"] ?? node?.Title ?? "";
+    const lat = node?.["@_Lat"] ?? node?.Lat ?? node?.["@_Latitude"] ?? node?.Latitude;
+    const long = node?.["@_Long"] ?? node?.Long ?? node?.["@_Longitude"] ?? node?.Longitude;
+    return { id, name, lat, long };
+  });
+
+  // Parse sources
+  const sources: Source[] = rawSources.map((node, idx) => {
+    const id = node?.["@_ID"] ?? node?.["@_Id"] ?? node?.["@_id"] ?? `S${idx + 1}`;
+    const title = node?.["@_Title"] ?? node?.Title;
+    const author = node?.["@_Author"] ?? node?.Author;
+    const publication = node?.["@_Publication"] ?? node?.Publication ?? node?.["@_Publ"] ?? node?.Publ;
+    return { id, title, author, publication };
+  });
+
   const persons: Person[] = rawIndividuals.map((node, idx) => {
     const id = node?.["@_ID"] ?? node?.["@_Id"] ?? node?.["@_id"] ?? `I${idx + 1}`;
     const name = node?.["@_Name"] ?? node?.Name ?? node?.DisplayName ?? node?.FullName;
@@ -65,17 +105,21 @@ export function gnoToModel(xmlText: string): { persons: Person[]; families: Fami
 
     const events = [];
     if (birthNode) {
+      const placeValue = birthNode?.["@_Place"] ?? birthNode?.Place ?? birthNode?.place;
       events.push({
         type: "BIRT",
         date: birthNode?.["@_Date"] ?? birthNode?.Date ?? birthNode?.date,
-        place: birthNode?.["@_Place"] ?? birthNode?.Place ?? birthNode?.place
+        place: placeValue,
+        placeId: placeValue && placeValue.startsWith("place") ? placeValue : undefined
       });
     }
     if (deathNode) {
+      const placeValue = deathNode?.["@_Place"] ?? deathNode?.Place ?? deathNode?.place;
       events.push({
         type: "DEAT",
         date: deathNode?.["@_Date"] ?? deathNode?.Date ?? deathNode?.date,
-        place: deathNode?.["@_Place"] ?? deathNode?.Place ?? deathNode?.place
+        place: placeValue,
+        placeId: placeValue && placeValue.startsWith("place") ? placeValue : undefined
       });
     }
 
@@ -121,5 +165,5 @@ export function gnoToModel(xmlText: string): { persons: Person[]; families: Fami
     });
   });
 
-  return { persons, families };
+  return { persons, families, places, sources };
 }

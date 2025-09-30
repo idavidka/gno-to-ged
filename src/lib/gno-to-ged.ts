@@ -11,7 +11,7 @@ import { modelToGed } from "../mappers/model-to-ged.js";
  */
 export async function gnoToGed(input: string | Buffer): Promise<string> {
   const xmlText = await readGnoXml(input);
-  const { persons, families } = gnoToModel(xmlText);
-  const ged = modelToGed(persons, families);
+  const { persons, families, places, sources } = gnoToModel(xmlText);
+  const ged = modelToGed(persons, families, places, sources);
   return ged;
 }

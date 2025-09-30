@@ -1,22 +1,30 @@
-import type { Family, Person } from "../model.js";
+import type { Family, Person, Place, Source } from "../model.js";
 
-// Nagyon egyszerű GEDCOM parser; alap tag-ekre fókuszál.
-export function gedToModel(ged: string): { persons: Person[]; families: Family[] } {
+// Very simple GEDCOM parser; focuses on basic tags.
+export function gedToModel(ged: string): { persons: Person[]; families: Family[]; places: Place[]; sources: Source[] } {
   const lines = ged.replace(/\r\n/g, "\n").split("\n");
   const persons: Person[] = [];
   const families: Family[] = [];
+  const places: Place[] = [];
+  const sources: Source[] = [];
 
-  let current: { type?: "INDI" | "FAM"; id?: string } = {};
+  let current: { type?: "INDI" | "FAM" | "PLAC" | "SOUR"; id?: string } = {};
   let currPerson: Person | undefined;
   let currFamily: Family | undefined;
+  let currPlace: Place | undefined;
+  let currSource: Source | undefined;
   let currEventTag: string | undefined;
 
   function flush() {
     if (current.type === "INDI" && currPerson) persons.push(currPerson);
     if (current.type === "FAM" && currFamily) families.push(currFamily);
+    if (current.type === "PLAC" && currPlace) places.push(currPlace);
+    if (current.type === "SOUR" && currSource) sources.push(currSource);
     current = {};
     currPerson = undefined;
     currFamily = undefined;
+    currPlace = undefined;
+    currSource = undefined;
     currEventTag = undefined;
   }
 
@@ -29,17 +37,25 @@ export function gedToModel(ged: string): { persons: Person[]; families: Family[]
     const level = Number(levelMatch[1]);
     const rest = levelMatch[2];
 
-    // Új rekord
+    // New record
     if (level === 0) {
       if (current.type) flush();
-      const m = /^@([^@]+)@\s+(INDI|FAM)/.exec(rest);
+      const m = /^@([^@]+)@\s+(INDI|FAM|_PLAC|SOUR)/.exec(rest);
       if (m) {
-        current.type = m[2] as "INDI" | "FAM";
+        const recordType = m[2];
         current.id = m[1];
-        if (current.type === "INDI") {
+        if (recordType === "INDI") {
+          current.type = "INDI";
           currPerson = { id: current.id, events: [] };
-        } else {
+        } else if (recordType === "FAM") {
+          current.type = "FAM";
           currFamily = { id: current.id, chil: [] };
+        } else if (recordType === "_PLAC") {
+          current.type = "PLAC";
+          currPlace = { id: current.id, name: "" };
+        } else if (recordType === "SOUR") {
+          current.type = "SOUR";
+          currSource = { id: current.id };
         }
       } else {
         current = {};
@@ -88,8 +104,30 @@ export function gedToModel(ged: string): { persons: Person[]; families: Family[]
         if (mC) { currFamily.chil!.push(mC[1]); continue; }
       }
     }
+
+    if (current.type === "PLAC" && currPlace) {
+      if (level === 1) {
+        const mName = /^NAME\s+(.+)$/.exec(rest);
+        if (mName) { currPlace.name = mName[1]; continue; }
+        const mLat = /^_LAT\s+(.+)$/.exec(rest);
+        if (mLat) { currPlace.lat = mLat[1]; continue; }
+        const mLong = /^_LONG\s+(.+)$/.exec(rest);
+        if (mLong) { currPlace.long = mLong[1]; continue; }
+      }
+    }
+
+    if (current.type === "SOUR" && currSource) {
+      if (level === 1) {
+        const mTitle = /^TITL\s+(.+)$/.exec(rest);
+        if (mTitle) { currSource.title = mTitle[1]; continue; }
+        const mAuth = /^AUTH\s+(.+)$/.exec(rest);
+        if (mAuth) { currSource.author = mAuth[1]; continue; }
+        const mPubl = /^PUBL\s+(.+)$/.exec(rest);
+        if (mPubl) { currSource.publication = mPubl[1]; continue; }
+      }
+    }
   }
   if (current.type) flush();
 
-  return { persons, families };
+  return { persons, families, places, sources };
 }
