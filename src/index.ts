@@ -1,2 +1,2 @@
 export { gnoToGed } from "./lib/gno-to-ged.js";
-export { gedToGno } from "./lib/ged-to-gno.js";
+export { gedToGno, type GnoFormat, type GedToGnoOptions } from "./lib/ged-to-gno.js";

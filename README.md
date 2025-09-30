@@ -33,31 +33,55 @@ npm run build
 # Convert .GNO to .GED
 npx gno-to-ged -i input.gno -o output.ged
 
-# Convert .GED to .GNO
+# Convert .GED to .GNO (GenoPro format - default)
 npx ged-to-gno -i input.ged -o output.gno
 
+# Convert .GED to .GNO with specific format
+npx ged-to-gno -i input.ged -o output.gno --format genopro
+npx ged-to-gno -i input.ged -o output.gno --format gramps
+npx ged-to-gno -i input.ged -o output.gno --format generic
+
+# With compression
+npx ged-to-gno -i input.ged -o output.gno.gz --gzip
+npx ged-to-gno -i input.ged -o output.gno.zip --zip
 ```
+
+### Supported GNO Formats
+
+The converter supports multiple GNO/XML genealogy formats:
+
+- **genopro** (default): GenoPro XML format with `<Genealogy>` root and `<Individuals>`, `<Families>`, `<Places>`, `<Sources>` containers
+- **gramps**: Gramps XML format with `<database>` root following Gramps XML 1.7.1 schema
+- **generic**: Generic genealogy XML format (same as GenoPro but more flexible)
 
 During development (without building):
 
 ```bash
 npm run dev:gno -- -i input.gno -o output.ged
 
-npm run dev:ged -- -i input.ged -o output.gno
+npm run dev:ged -- -i input.ged -o output.gno --format gramps
 ```
 
 ## Library API
 
 ```ts
-import { gnoToGed } from "./dist";
+import { gnoToGed, gedToGno, type GnoFormat } from "./dist";
 
+// Convert GNO to GED
 const gedText = await gnoToGed("path/to/input.gno"); // or Buffer
 console.log(gedText);
 
-import { gedToGno } from "./dist";
+// Convert GED to GNO with format selection
+const gedcomText = "0 HEAD\n1 SOUR ...";
+const gnoBuffer = await gedToGno(gedcomText, { 
+  format: "gramps",  // or "genopro", "generic"
+  gzip: false,
+  zip: false
+});
 
-const gnoContent = await gnoToGed("path/to/input.ged"); // Buffer
-console.log(gnoContent);
+// Write to file
+import fs from "fs/promises";
+await fs.writeFile("output.gno", gnoBuffer);
 ```
 
 ## How it works
