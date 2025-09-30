@@ -9,10 +9,10 @@ Features:
 - Emits GEDCOM 5.5.1 with comprehensive record support:
   - INDI (individuals) with NAME, SEX, events (BIRT/DEAT with DATE/PLAC), FAMC/FAMS
   - FAM (families) with HUSB, WIFE, CHIL references
-  - Place records (_PLAC) with coordinates (LAT/LONG)
+  - PLAC with MAP structure (LATI/LONG) for place coordinates embedded in events
   - Source records (SOUR) with title, author, and publication info
 - Recursively resolves all references:
-  - Place references (e.g., `place00055`) are resolved to full Place records
+  - Place references (e.g., `place00055`) are resolved and coordinates embedded in events
   - Source references are fully expanded
   - Family child references are properly maintained
 - Bidirectional conversion: GNO ↔ GED with round-trip fidelity
@@ -55,12 +55,12 @@ console.log(gedText);
 2. Detects compression (gzip/zlib/zip) and decompresses if needed.
 3. Parses the result as XML.
 4. Maps XML → internal model (persons, families, places, sources).
-5. Recursively resolves all references (e.g., place IDs → Place records).
-6. Serializes internal model → GEDCOM (5.5.1) with all referenced entities.
+5. Recursively resolves all references (e.g., place IDs → embedded coordinates).
+6. Serializes internal model → GEDCOM (5.5.1) with proper MAP/LATI/LONG structure for places.
 
 For GED → GNO conversion:
 1. Parses GEDCOM file into internal model.
-2. Extracts all records (individuals, families, places, sources).
+2. Extracts all records (individuals, families, places from MAP structures, sources).
 3. Generates GNO XML with proper structure and references.
 4. Optionally compresses the output (gzip/zip).
 
@@ -68,8 +68,7 @@ For GED → GNO conversion:
 
 - The mapper is heuristic. For full fidelity, we may need to align to your exact `.gno` XML schema and field names.
 - Only a subset of GEDCOM tags are supported by default. Extending the mapper is straightforward—add fields in `src/mappers/gno-to-model.ts` and `src/mappers/model-to-ged.ts`.
-- Place records use custom `_PLAC` tag in GEDCOM as standard GEDCOM doesn't have a separate place record type.
-- Source citations on events are modeled but not yet fully implemented in the conversion.
+- Place coordinates are embedded in events using GEDCOM standard MAP/LATI/LONG structure (not as separate records).
 
 ## Requirements
 
