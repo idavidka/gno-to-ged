@@ -95,8 +95,31 @@ export function gnoToModel(xmlText: string): { persons: Person[]; families: Fami
 
   const persons: Person[] = rawIndividuals.map((node, idx) => {
     const id = node?.["@_ID"] ?? node?.["@_Id"] ?? node?.["@_id"] ?? `I${idx + 1}`;
-    const name = node?.["@_Name"] ?? node?.Name ?? node?.DisplayName ?? node?.FullName;
-    const sexRaw = (node?.["@_Sex"] ?? node?.Sex ?? "").toString().toUpperCase();
+    
+    // Extract name - handle complex Name object structure
+    let name: string | undefined;
+    const nameObj = node?.Name;
+    if (nameObj) {
+      if (typeof nameObj === "string") {
+        name = nameObj;
+      } else if (nameObj["#text"]) {
+        name = nameObj["#text"];
+      } else if (nameObj.Display) {
+        name = typeof nameObj.Display === "string" ? nameObj.Display : nameObj.Display["#text"];
+      } else if (nameObj.First || nameObj.Last) {
+        // Construct name from parts
+        const parts = [];
+        if (nameObj.First) parts.push(nameObj.First);
+        if (nameObj.Last) parts.push(nameObj.Last);
+        name = parts.join(" ");
+      }
+    }
+    if (!name) {
+      name = node?.["@_Name"] ?? node?.DisplayName ?? node?.FullName;
+    }
+    
+    // Extract sex/gender
+    const sexRaw = (node?.["@_Sex"] ?? node?.Sex ?? node?.Gender ?? "").toString().toUpperCase();
     const sex = sexRaw === "M" || sexRaw === "F" ? sexRaw : "U";
 
     // Birth/Death extraction (heuristic)
@@ -149,6 +172,50 @@ export function gnoToModel(xmlText: string): { persons: Person[]; families: Fami
       .filter(Boolean);
 
     return { id, husb, wife, chil };
+  });
+
+  // Parse PedigreeLinks to establish family relationships
+  const pedigreeLinksContainer = rootObj.PedigreeLinks ?? rootObj.pedigreeLinks;
+  const rawPedigreeLinks: any[] =
+    (Array.isArray(pedigreeLinksContainer?.PedigreeLink) ? pedigreeLinksContainer.PedigreeLink :
+    pedigreeLinksContainer?.PedigreeLink ? [pedigreeLinksContainer.PedigreeLink] : []) as any[];
+
+  // Build family relationships from PedigreeLinks
+  const familyMap = new Map(families.map(f => [f.id, f]));
+  
+  rawPedigreeLinks.forEach(link => {
+    const linkType = link?.["@_PedigreeLink"] ?? link?.PedigreeLink;
+    const familyId = link?.["@_Family"] ?? link?.Family;
+    const individualId = link?.["@_Individual"] ?? link?.Individual;
+    
+    if (!familyId || !individualId) return;
+    
+    const family = familyMap.get(familyId);
+    if (!family) return;
+    
+    // "Parent" means spouse, "Biological" means child
+    if (linkType === "Parent") {
+      // Determine if husb or wife based on individual's gender
+      const person = rawIndividuals.find(p => 
+        (p?.["@_ID"] ?? p?.ID) === individualId
+      );
+      const gender = person?.Gender ?? person?.["@_Sex"] ?? person?.Sex;
+      
+      if (gender === "M" && !family.husb) {
+        family.husb = individualId;
+      } else if (gender === "F" && !family.wife) {
+        family.wife = individualId;
+      } else if (!family.husb) {
+        family.husb = individualId;
+      } else if (!family.wife) {
+        family.wife = individualId;
+      }
+    } else if (linkType === "Biological" || linkType === "Adopted" || linkType === "Foster") {
+      if (!family.chil) family.chil = [];
+      if (!family.chil.includes(individualId)) {
+        family.chil.push(individualId);
+      }
+    }
   });
 
   // Backfill famc/fams pointers (useful for GED generation)
