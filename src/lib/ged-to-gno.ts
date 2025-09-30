@@ -2,7 +2,7 @@ import { gedToModel } from "../mappers/ged-to-model.js";
 import { modelToGnoXml } from "../mappers/model-to-gno.js";
 import { maybeCompress } from "../utils/compression.js";
 
-export type GnoFormat = "genopro" | "gramps" | "generic";
+export type GnoFormat = "genopro" | "gramps" | "legacy" | "myheritage" | "generic";
 
 export interface GedToGnoOptions {
   gzip?: boolean;

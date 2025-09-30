@@ -22,9 +22,9 @@ const argv = await yargs(hideBin(process.argv))
   .option("format", {
     alias: "f",
     type: "string",
-    choices: ["genopro", "gramps", "generic"],
+    choices: ["genopro", "gramps", "legacy", "myheritage", "generic"],
     default: "genopro",
-    describe: "Output GNO format (genopro, gramps, or generic)",
+    describe: "Output GNO format (genopro, gramps, legacy, myheritage, or generic)",
   })
   .option("gzip", {
     type: "boolean",

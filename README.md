@@ -39,6 +39,8 @@ npx ged-to-gno -i input.ged -o output.gno
 # Convert .GED to .GNO with specific format
 npx ged-to-gno -i input.ged -o output.gno --format genopro
 npx ged-to-gno -i input.ged -o output.gno --format gramps
+npx ged-to-gno -i input.ged -o output.gno --format legacy
+npx ged-to-gno -i input.ged -o output.gno --format myheritage
 npx ged-to-gno -i input.ged -o output.gno --format generic
 
 # With compression
@@ -48,11 +50,13 @@ npx ged-to-gno -i input.ged -o output.gno.zip --zip
 
 ### Supported GNO Formats
 
-The converter supports multiple GNO/XML genealogy formats:
+The converter supports multiple GNO/XML genealogy formats from popular applications:
 
-- **genopro** (default): GenoPro XML format with `<Genealogy>` root and `<Individuals>`, `<Families>`, `<Places>`, `<Sources>` containers
-- **gramps**: Gramps XML format with `<database>` root following Gramps XML 1.7.1 schema
-- **generic**: Generic genealogy XML format (same as GenoPro but more flexible)
+- **genopro** (default): GenoPro XML format with proper namespace declarations (`http://genopro.com/`), version info, and `<GenoPro><Genealogy>` root structure
+- **gramps**: Gramps XML 1.7.1 format with `<database>` root following the Gramps XML schema specification (`http://gramps-project.org/xml/1.7.1/`)
+- **legacy**: Legacy Family Tree format with `<FamilyTree>` root and proper namespace declarations
+- **myheritage**: MyHeritage format with `<MyHeritage>` root and MyHeritage-specific element structure
+- **generic**: Generic genealogy XML format (simplified structure without specific namespace requirements)
 
 During development (without building):
 
@@ -74,7 +78,7 @@ console.log(gedText);
 // Convert GED to GNO with format selection
 const gedcomText = "0 HEAD\n1 SOUR ...";
 const gnoBuffer = await gedToGno(gedcomText, { 
-  format: "gramps",  // or "genopro", "generic"
+  format: "legacy",  // or "genopro", "gramps", "myheritage", "generic"
   gzip: false,
   zip: false
 });
