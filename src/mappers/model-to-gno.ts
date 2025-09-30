@@ -188,5 +188,17 @@ export function modelToGnoXml(
     format: true,
     suppressEmptyNode: true
   });
-  return builder.build(root);
+  
+  const xmlContent = builder.build(root);
+  
+  // Add XML declaration based on format
+  let header = '<?xml version="1.0" encoding="UTF-8"?>\n';
+  
+  if (format === "gramps") {
+    // Gramps format already includes xmlns in the database element
+    return header + xmlContent;
+  } else {
+    // GenoPro and generic formats
+    return header + xmlContent;
+  }
 }
