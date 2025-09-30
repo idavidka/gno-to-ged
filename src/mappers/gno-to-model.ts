@@ -141,6 +141,7 @@ export function gnoToModel(xmlText: string): { persons: Person[]; families: Fami
       (Array.isArray(node?.Child) ? node.Child :
       node?.Child ? [node.Child] :
       Array.isArray(node?.Children?.Child) ? node.Children.Child :
+      node?.Children?.Child ? [node.Children.Child] :
       []) as any[];
 
     const chil = childrenArray
