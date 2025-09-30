@@ -23,10 +23,16 @@ export function modelToGed(persons: Person[], families: Family[], places: Place[
     for (const ev of p.events ?? []) {
       lines.push(`1 ${ev.type}`);
       if (ev.date) lines.push(`2 DATE ${ev.date}`);
-      // If there's a placeId, resolve it to the actual place name
+      // If there's a placeId, resolve it to the actual place with coordinates
       if (ev.placeId && placeMap.has(ev.placeId)) {
         const place = placeMap.get(ev.placeId)!;
         lines.push(`2 PLAC ${place.name}`);
+        // Add coordinates if available using MAP structure
+        if (place.lat || place.long) {
+          lines.push(`3 MAP`);
+          if (place.lat) lines.push(`4 LATI ${place.lat}`);
+          if (place.long) lines.push(`4 LONG ${place.long}`);
+        }
       } else if (ev.place) {
         lines.push(`2 PLAC ${ev.place}`);
       }
@@ -40,14 +46,6 @@ export function modelToGed(persons: Person[], families: Family[], places: Place[
     if (f.husb) lines.push(`1 HUSB @${f.husb}@`);
     if (f.wife) lines.push(`1 WIFE @${f.wife}@`);
     for (const c of f.chil ?? []) lines.push(`1 CHIL @${c}@`);
-  }
-
-  // Output place records
-  for (const place of places) {
-    lines.push(`0 @${place.id}@ _PLAC`);
-    lines.push(`1 NAME ${place.name}`);
-    if (place.lat) lines.push(`1 _LAT ${place.lat}`);
-    if (place.long) lines.push(`1 _LONG ${place.long}`);
   }
 
   // Output source records
