@@ -4,11 +4,13 @@
   "description": "GenoPro .gno to GEDCOM .ged converter (TypeScript)",
   "type": "module",
   "bin": {
-    "gno-to-ged": "dist/cli.js"
+    "gno-to-ged": "dist/cli-gno-to-ged.js",
+    "ged-to-gno": "dist/cli-ged-to-gno.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "tsx src/cli.ts"
+    "dev:gno": "tsx src/cli-gno-to-ged.ts",
+    "dev:ged": "tsx src/cli-ged-to-gno.ts"
   },
   "dependencies": {
     "fast-xml-parser": "^4.4.1",

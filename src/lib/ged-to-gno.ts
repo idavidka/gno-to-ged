@@ -7,9 +7,17 @@ export interface GedToGnoOptions {
   zip?: boolean;
 }
 
-export async function gedToGno(gedText: string, opts: GedToGnoOptions = {}): Promise<Buffer> {
+export async function gedToGno(
+  gedText: string,
+  opts: GedToGnoOptions = {}
+): Promise<Buffer> {
   const model = gedToModel(gedText);
-  const xml = modelToGnoXml(model.persons, model.families, model.places, model.sources);
+  const xml = modelToGnoXml(
+    model.persons,
+    model.families,
+    model.places,
+    model.sources
+  );
   const buf = Buffer.from(xml, "utf8");
   return maybeCompress(buf, opts);
 }

@@ -32,12 +32,18 @@ npm run build
 ```bash
 # Convert .GNO to .GED
 npx gno-to-ged -i input.gno -o output.ged
+
+# Convert .GED to .GNO
+npx ged-to-gno -i input.ged -o output.gno
+
 ```
 
 During development (without building):
 
 ```bash
-npm run dev -- input.gno -o output.ged
+npm run dev:gno -- -i input.gno -o output.ged
+
+npm run dev:ged -- -i input.ged -o output.gno
 ```
 
 ## Library API
@@ -47,6 +53,11 @@ import { gnoToGed } from "./dist";
 
 const gedText = await gnoToGed("path/to/input.gno"); // or Buffer
 console.log(gedText);
+
+import { gedToGno } from "./dist";
+
+const gnoContent = await gnoToGed("path/to/input.ged"); // Buffer
+console.log(gnoContent);
 ```
 
 ## How it works
@@ -59,6 +70,7 @@ console.log(gedText);
 6. Serializes internal model → GEDCOM (5.5.1) with proper MAP/LATI/LONG structure for places.
 
 For GED → GNO conversion:
+
 1. Parses GEDCOM file into internal model.
 2. Extracts all records (individuals, families, places from MAP structures, sources).
 3. Generates GNO XML with proper structure and references.
