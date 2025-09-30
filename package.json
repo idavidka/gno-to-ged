@@ -3,6 +3,17 @@
   "version": "0.1.0",
   "description": "GenoPro .gno to GEDCOM .ged converter (TypeScript)",
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "bin": {
     "gno-to-ged": "dist/cli-gno-to-ged.js",
     "ged-to-gno": "dist/cli-ged-to-gno.js"

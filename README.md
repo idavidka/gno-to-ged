@@ -69,7 +69,11 @@ npm run dev:ged -- -i input.ged -o output.gno --format gramps
 ## Library API
 
 ```ts
-import { gnoToGed, gedToGno, type GnoFormat } from "./dist";
+// When using as an installed package
+import { gnoToGed, gedToGno, type GnoFormat } from "gno-to-ged";
+
+// When using locally in this repository
+// import { gnoToGed, gedToGno, type GnoFormat } from "./dist";
 
 // Convert GNO to GED
 const gedText = await gnoToGed("path/to/input.gno"); // or Buffer
