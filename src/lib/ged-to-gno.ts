@@ -1,8 +1,7 @@
 import { gedToModel } from "../mappers/ged-to-model.js";
 import { modelToGnoXml } from "../mappers/model-to-gno.js";
+import { GnoFormat } from "../types.js";
 import { maybeCompress } from "../utils/compression.js";
-
-export type GnoFormat = "genopro" | "gramps" | "legacy" | "myheritage" | "generic";
 
 export interface GedToGnoOptions {
   gzip?: boolean;
@@ -13,7 +12,7 @@ export interface GedToGnoOptions {
 export async function gedToGno(
   gedText: string,
   opts: GedToGnoOptions = {}
-): Promise<Buffer> {
+): Promise<Uint8Array> {
   const model = gedToModel(gedText);
   const xml = modelToGnoXml(
     model.persons,
@@ -22,6 +21,7 @@ export async function gedToGno(
     model.sources,
     opts.format || "genopro"
   );
-  const buf = Buffer.from(xml, "utf8");
-  return maybeCompress(buf, opts);
+  const encoder = new TextEncoder();
+  const arr = encoder.encode(xml);
+  return maybeCompress(arr, opts);
 }

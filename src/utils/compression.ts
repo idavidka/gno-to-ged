@@ -1,20 +1,28 @@
 import { inflate, ungzip, gzip as gzipPako } from "pako";
 import JSZip from "jszip";
+import { Binary } from "../types.js";
+
+function getArray(buf: Binary): Uint8Array {
+  return buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+}
 
 /** Detect gzip via magic header (0x1F 0x8B). */
-export function isGzip(buf: Buffer) {
-  return buf[0] === 0x1f && buf[1] === 0x8b;
+export function isGzip(buf: Binary) {
+  const arr = getArray(buf);
+  return arr[0] === 0x1f && arr[1] === 0x8b;
 }
 
 /** Detect zlib via common CMF/FLG bytes (0x78 0x01/0x9C/0xDA). */
-export function isZlib(buf: Buffer) {
-  return buf[0] === 0x78 && [0x01, 0x9c, 0xda].includes(buf[1]);
+export function isZlib(buf: Binary) {
+  const arr = getArray(buf);
+  return arr[0] === 0x78 && [0x01, 0x9c, 0xda].includes(arr[1]);
 }
 
 /** Detect zip via magic header "PK\x03\x04". */
-export function isZip(buf: Buffer) {
+export function isZip(buf: Binary) {
+  const arr = getArray(buf);
   return (
-    buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04
+    arr[0] === 0x50 && arr[1] === 0x4b && arr[2] === 0x03 && arr[3] === 0x04
   );
 }
 
@@ -23,22 +31,23 @@ export function isZip(buf: Buffer) {
  * Supports: gzip, zlib/deflate, zip (takes the first file entry).
  * Falls back to raw UTF-8 if no known compression is detected.
  */
-export async function maybeDecompressToText(buf: Buffer): Promise<string> {
-  if (isGzip(buf)) {
-    const out = ungzip(buf);
+export async function maybeDecompressToText(buf: Binary): Promise<string> {
+  const arr = getArray(buf);
+  if (isGzip(arr)) {
+    const out = ungzip(arr);
     return new TextDecoder().decode(out);
   }
-  if (isZlib(buf)) {
-    const out = inflate(buf);
+  if (isZlib(arr)) {
+    const out = inflate(arr);
     return new TextDecoder().decode(out);
   }
-  if (isZip(buf)) {
-    const zip = await JSZip.loadAsync(buf);
+  if (isZip(arr)) {
+    const zip = await JSZip.loadAsync(arr);
     const firstName = Object.keys(zip.files)[0];
     const firstFile = await zip.files[firstName].async("string");
     return firstFile;
   }
-  return buf.toString("utf8");
+  return new TextDecoder().decode(arr);
 }
 
 /**
@@ -48,15 +57,14 @@ export async function maybeDecompressToText(buf: Buffer): Promise<string> {
  * - Otherwise, returns the input unmodified.
  */
 export async function maybeCompress(
-  buf: Buffer,
+  buf: Uint8Array,
   opts: { gzip?: boolean; zip?: boolean } = {}
-): Promise<Buffer> {
+): Promise<Uint8Array> {
   if (opts.gzip) {
     const out = gzipPako(buf);
-    return Buffer.from(out);
+    return out; // pako Uint8Array-t ad vissza
   }
   if (opts.zip) {
-    // If you want ZIP output, I can add JSZip and implement it.
     throw new Error(
       "ZIP output not implemented yet. Use { gzip: true } or ask me to add ZIP support."
     );

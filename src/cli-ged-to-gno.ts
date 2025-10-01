@@ -3,7 +3,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
-import { gedToGno, type GnoFormat } from "./lib/ged-to-gno.js";
+import { gedToGno } from "./lib/ged-to-gno.js";
+import { GnoFormat } from "./types.js";
 
 const argv = await yargs(hideBin(process.argv))
   .usage("Usage: $0 <input.ged> -o <output.gno> [--format <format>]")
@@ -24,7 +25,8 @@ const argv = await yargs(hideBin(process.argv))
     type: "string",
     choices: ["genopro", "gramps", "legacy", "myheritage", "generic"],
     default: "genopro",
-    describe: "Output GNO format (genopro, gramps, legacy, myheritage, or generic)",
+    describe:
+      "Output GNO format (genopro, gramps, legacy, myheritage, or generic)",
   })
   .option("gzip", {
     type: "boolean",
@@ -55,7 +57,9 @@ try {
     zip: argv.zip,
   });
   await fs.writeFile(argv.out as string, gno);
-  console.log(`Done: ${path.resolve(argv.out as string)} (format: ${argv.format})`);
+  console.log(
+    `Done: ${path.resolve(argv.out as string)} (format: ${argv.format})`
+  );
 } catch (e) {
   console.error("Conversion failed:", e instanceof Error ? e.message : e);
   process.exit(1);

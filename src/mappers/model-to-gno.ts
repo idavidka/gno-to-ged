@@ -1,12 +1,19 @@
 import { XMLBuilder } from "fast-xml-parser";
 import type { Family, Person, Place, Source } from "../model.js";
+import { GnoFormat } from "../types.js";
 
-export type GnoFormat = "genopro" | "gramps" | "legacy" | "myheritage" | "generic";
-
-function eventToNode(ev: { type: string; date?: string; place?: string; placeId?: string }, format: GnoFormat) {
+function eventToNode(
+  ev: { type: string; date?: string; place?: string; placeId?: string },
+  format: GnoFormat
+) {
   if (format === "gramps") {
     // Gramps uses different tag names
-    const tag = ev.type === "BIRT" ? "birth" : ev.type === "DEAT" ? "death" : ev.type.toLowerCase();
+    const tag =
+      ev.type === "BIRT"
+        ? "birth"
+        : ev.type === "DEAT"
+        ? "death"
+        : ev.type.toLowerCase();
     const node: any = {};
     if (ev.date) node.dateval = { "@_val": ev.date };
     if (ev.placeId || ev.place) {
@@ -15,7 +22,8 @@ function eventToNode(ev: { type: string; date?: string; place?: string; placeId?
     return { [tag]: node };
   } else {
     // GenoPro and generic format
-    const tag = ev.type === "BIRT" ? "Birth" : ev.type === "DEAT" ? "Death" : ev.type;
+    const tag =
+      ev.type === "BIRT" ? "Birth" : ev.type === "DEAT" ? "Death" : ev.type;
     const attrs: any = {};
     if (ev.date) attrs["@_Date"] = ev.date;
     // Prefer placeId reference over plain text place
@@ -25,23 +33,28 @@ function eventToNode(ev: { type: string; date?: string; place?: string; placeId?
   }
 }
 
-function buildGenoProXml(persons: Person[], families: Family[], places: Place[], sources: Source[]): any {
-  const root: any = { 
-    "?xml": { 
-      "@_version": "1.0", 
-      "@_encoding": "UTF-8" 
+function buildGenoProXml(
+  persons: Person[],
+  families: Family[],
+  places: Place[],
+  sources: Source[]
+): any {
+  const root: any = {
+    "?xml": {
+      "@_version": "1.0",
+      "@_encoding": "UTF-8",
     },
     GenoPro: {
       "@_xmlns": "http://genopro.com/",
       "@_xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
       "@_Version": "2020.0.0.1",
-      Genealogy: { 
-        Individuals: { Individual: [] as any[] }, 
+      Genealogy: {
+        Individuals: { Individual: [] as any[] },
         Families: { Family: [] as any[] },
         Places: { Place: [] as any[] },
-        Sources: { Source: [] as any[] }
-      }
-    }
+        Sources: { Source: [] as any[] },
+      },
+    },
   };
 
   for (const p of persons) {
@@ -61,7 +74,7 @@ function buildGenoProXml(persons: Person[], families: Family[], places: Place[],
     if (f.husb) node["@_Husband"] = f.husb;
     if (f.wife) node["@_Wife"] = f.wife;
     if (f.chil?.length) {
-      node.Children = { Child: f.chil.map(id => ({ "@_Ref": id })) };
+      node.Children = { Child: f.chil.map((id) => ({ "@_Ref": id })) };
     }
     root.GenoPro.Genealogy.Families.Family.push(node);
   }
@@ -84,31 +97,36 @@ function buildGenoProXml(persons: Person[], families: Family[], places: Place[],
   return root;
 }
 
-function buildGrampsXml(persons: Person[], families: Family[], places: Place[], sources: Source[]): any {
+function buildGrampsXml(
+  persons: Person[],
+  families: Family[],
+  places: Place[],
+  sources: Source[]
+): any {
   const root: any = {
     database: {
       "@_xmlns": "http://gramps-project.org/xml/1.7.1/",
       people: { person: [] as any[] },
       families: { family: [] as any[] },
       places: { placeobj: [] as any[] },
-      sources: { source: [] as any[] }
-    }
+      sources: { source: [] as any[] },
+    },
   };
 
   for (const p of persons) {
-    const node: any = { 
+    const node: any = {
       "@_id": p.id,
-      "@_handle": p.id
+      "@_handle": p.id,
     };
     if (p.name) {
-      node.name = { 
+      node.name = {
         "@_type": "Birth Name",
         first: p.name.split(" ")[0] || "",
-        surname: { "#text": p.name.split(" ").slice(1).join(" ") || "" }
+        surname: { "#text": p.name.split(" ").slice(1).join(" ") || "" },
       };
     }
     if (p.sex) node.gender = p.sex;
-    
+
     if (p.events?.length) {
       node.eventref = [];
       for (const ev of p.events) {
@@ -116,50 +134,50 @@ function buildGrampsXml(persons: Person[], families: Family[], places: Place[], 
         node.eventref.push({ "@_hlink": `${p.id}_${ev.type}` });
       }
     }
-    
+
     if (p.famc?.length) {
-      node.childof = p.famc.map(fid => ({ "@_hlink": fid }));
+      node.childof = p.famc.map((fid) => ({ "@_hlink": fid }));
     }
     if (p.fams?.length) {
-      node.parentin = p.fams.map(fid => ({ "@_hlink": fid }));
+      node.parentin = p.fams.map((fid) => ({ "@_hlink": fid }));
     }
-    
+
     root.database.people.person.push(node);
   }
 
   for (const f of families) {
-    const node: any = { 
+    const node: any = {
       "@_id": f.id,
-      "@_handle": f.id
+      "@_handle": f.id,
     };
     if (f.husb) node.father = { "@_hlink": f.husb };
     if (f.wife) node.mother = { "@_hlink": f.wife };
     if (f.chil?.length) {
-      node.childref = f.chil.map(id => ({ "@_hlink": id }));
+      node.childref = f.chil.map((id) => ({ "@_hlink": id }));
     }
     root.database.families.family.push(node);
   }
 
   for (const place of places) {
-    const node: any = { 
+    const node: any = {
       "@_id": place.id,
       "@_handle": place.id,
       "@_type": "Unknown",
-      pname: { "@_value": place.name }
+      pname: { "@_value": place.name },
     };
     if (place.lat || place.long) {
       node.coord = {
         "@_lat": place.lat || "0",
-        "@_long": place.long || "0"
+        "@_long": place.long || "0",
       };
     }
     root.database.places.placeobj.push(node);
   }
 
   for (const source of sources) {
-    const node: any = { 
+    const node: any = {
       "@_id": source.id,
-      "@_handle": source.id
+      "@_handle": source.id,
     };
     if (source.title) node.stitle = source.title;
     if (source.author) node.sauthor = source.author;
@@ -170,11 +188,16 @@ function buildGrampsXml(persons: Person[], families: Family[], places: Place[], 
   return root;
 }
 
-function buildLegacyFamilyTreeXml(persons: Person[], families: Family[], places: Place[], sources: Source[]): any {
+function buildLegacyFamilyTreeXml(
+  persons: Person[],
+  families: Family[],
+  places: Place[],
+  sources: Source[]
+): any {
   const root: any = {
     "?xml": {
       "@_version": "1.0",
-      "@_encoding": "UTF-8"
+      "@_encoding": "UTF-8",
     },
     FamilyTree: {
       "@_xmlns": "http://www.legacyfamilytree.com/",
@@ -182,8 +205,8 @@ function buildLegacyFamilyTreeXml(persons: Person[], families: Family[], places:
       Individuals: { Individual: [] as any[] },
       Families: { Family: [] as any[] },
       Places: { Place: [] as any[] },
-      Sources: { Source: [] as any[] }
-    }
+      Sources: { Source: [] as any[] },
+    },
   };
 
   for (const p of persons) {
@@ -207,7 +230,7 @@ function buildLegacyFamilyTreeXml(persons: Person[], families: Family[], places:
     if (f.husb) node["@_Husband"] = f.husb;
     if (f.wife) node["@_Wife"] = f.wife;
     if (f.chil?.length) {
-      node.Children = { Child: f.chil.map(id => ({ "@_ID": id })) };
+      node.Children = { Child: f.chil.map((id) => ({ "@_ID": id })) };
     }
     root.FamilyTree.Families.Family.push(node);
   }
@@ -230,11 +253,16 @@ function buildLegacyFamilyTreeXml(persons: Person[], families: Family[], places:
   return root;
 }
 
-function buildMyHeritageXml(persons: Person[], families: Family[], places: Place[], sources: Source[]): any {
+function buildMyHeritageXml(
+  persons: Person[],
+  families: Family[],
+  places: Place[],
+  sources: Source[]
+): any {
   const root: any = {
     "?xml": {
       "@_version": "1.0",
-      "@_encoding": "UTF-8"
+      "@_encoding": "UTF-8",
     },
     MyHeritage: {
       "@_xmlns": "http://www.myheritage.com/",
@@ -242,8 +270,8 @@ function buildMyHeritageXml(persons: Person[], families: Family[], places: Place
       People: { Person: [] as any[] },
       Families: { Family: [] as any[] },
       Places: { Location: [] as any[] },
-      Sources: { Source: [] as any[] }
-    }
+      Sources: { Source: [] as any[] },
+    },
   };
 
   for (const p of persons) {
@@ -253,7 +281,9 @@ function buildMyHeritageXml(persons: Person[], families: Family[], places: Place
       node.FirstName = parts[0] || "";
       node.LastName = parts.slice(1).join(" ") || "";
     }
-    if (p.sex && p.sex !== "U") node.Gender = p.sex === "M" ? "Male" : p.sex === "F" ? "Female" : "Unknown";
+    if (p.sex && p.sex !== "U")
+      node.Gender =
+        p.sex === "M" ? "Male" : p.sex === "F" ? "Female" : "Unknown";
     if (p.events?.length) {
       node.Events = { Event: [] };
       for (const ev of p.events) {
@@ -271,7 +301,7 @@ function buildMyHeritageXml(persons: Person[], families: Family[], places: Place
     if (f.husb) node.husband = { "@_ref": f.husb };
     if (f.wife) node.wife = { "@_ref": f.wife };
     if (f.chil?.length) {
-      node.children = { child: f.chil.map(id => ({ "@_ref": id })) };
+      node.children = { child: f.chil.map((id) => ({ "@_ref": id })) };
     }
     root.MyHeritage.Families.Family.push(node);
   }
@@ -296,14 +326,14 @@ function buildMyHeritageXml(persons: Person[], families: Family[], places: Place
 
 // Simple, consistent GNO XML (supports multiple formats)
 export function modelToGnoXml(
-  persons: Person[], 
-  families: Family[], 
-  places: Place[] = [], 
+  persons: Person[],
+  families: Family[],
+  places: Place[] = [],
   sources: Source[] = [],
   format: GnoFormat = "genopro"
 ): string {
   let root: any;
-  
+
   switch (format) {
     case "gramps":
       root = buildGrampsXml(persons, families, places, sources);
@@ -326,17 +356,17 @@ export function modelToGnoXml(
     attributeNamePrefix: "@_",
     format: true,
     suppressEmptyNode: true,
-    suppressBooleanAttributes: false
+    suppressBooleanAttributes: false,
   });
-  
+
   const xmlContent = builder.build(root);
-  
+
   // XML declaration is now included in the GenoPro structure
   // For Gramps, we still need to add it separately
   if (format === "gramps") {
     const header = '<?xml version="1.0" encoding="UTF-8"?>\n';
     return header + xmlContent;
   }
-  
+
   return xmlContent;
 }
