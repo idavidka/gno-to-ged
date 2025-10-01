@@ -23,6 +23,10 @@
     "dev:gno": "tsx src/cli-gno-to-ged.ts",
     "dev:ged": "tsx src/cli-ged-to-gno.ts"
   },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:idavidka/gno-to-ged.git"
+  },
   "dependencies": {
     "fast-xml-parser": "^4.4.1",
     "jszip": "^3.10.1",
