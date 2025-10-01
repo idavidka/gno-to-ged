@@ -1,5 +1,5 @@
 import { inflate, ungzip, gzip as gzipPako } from "pako";
-import unzipper from "unzipper";
+import JSZip from "jszip";
 
 /** Detect gzip via magic header (0x1F 0x8B). */
 export function isGzip(buf: Buffer) {
@@ -33,11 +33,10 @@ export async function maybeDecompressToText(buf: Buffer): Promise<string> {
     return new TextDecoder().decode(out);
   }
   if (isZip(buf)) {
-    const dir = await unzipper.Open.buffer(buf);
-    const first = dir.files.find((f) => !f.path.endsWith("/"));
-    if (!first) throw new Error("ZIP: no file entry found");
-    const content = await first.buffer();
-    return content.toString("utf8");
+    const zip = await JSZip.loadAsync(buf);
+    const firstName = Object.keys(zip.files)[0];
+    const firstFile = await zip.files[firstName].async("string");
+    return firstFile;
   }
   return buf.toString("utf8");
 }

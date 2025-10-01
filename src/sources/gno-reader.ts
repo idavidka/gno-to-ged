@@ -9,7 +9,9 @@ export async function readGnoXml(input: string | Buffer): Promise<string> {
   const buf = Buffer.isBuffer(input) ? input : await fs.readFile(input);
   const xml = await maybeDecompressToText(buf);
   if (!xml.trim().startsWith("<")) {
-    throw new Error(".gno does not look like XML (it may require different processing)");
+    throw new Error(
+      ".gno does not look like XML (it may require different processing)"
+    );
   }
   return xml;
 }
