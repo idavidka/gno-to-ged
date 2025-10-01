@@ -30,6 +30,7 @@ export function gnoToModel(xmlText: string): { persons: Person[]; families: Fami
 
   // Resolve the likely root object
   const rootObj =
+    root.GenoPro?.Genealogy ??
     root.GenoPro ??
     root.Genealogy ??
     root.genealogy ??
@@ -40,22 +41,26 @@ export function gnoToModel(xmlText: string): { persons: Person[]; families: Fami
     rootObj.Individuals ?? rootObj.Persons ?? rootObj.individuals ?? rootObj.persons;
 
   // Normalize individuals to an array
-  const rawIndividuals: any[] =
-    (Array.isArray(individualsContainer?.Individual) ? individualsContainer.Individual :
-    individualsContainer?.Individual ? [individualsContainer.Individual] :
-    Array.isArray(individualsContainer?.Person) ? individualsContainer.Person :
-    individualsContainer?.Person ? [individualsContainer.Person] : []) as any[];
+  const individuals1 = Array.isArray(individualsContainer?.Individual) 
+    ? individualsContainer.Individual 
+    : individualsContainer?.Individual ? [individualsContainer.Individual] : [];
+  const individuals2 = Array.isArray(individualsContainer?.Person) 
+    ? individualsContainer.Person 
+    : individualsContainer?.Person ? [individualsContainer.Person] : [];
+  const rawIndividuals: any[] = [...individuals1, ...individuals2];
 
   // Resolve families container
   const familiesContainer =
     rootObj.Families ?? rootObj.Unions ?? rootObj.families ?? rootObj.unions;
 
   // Normalize families to an array
-  const rawFamilies: any[] =
-    (Array.isArray(familiesContainer?.Family) ? familiesContainer.Family :
-    familiesContainer?.Family ? [familiesContainer.Family] :
-    Array.isArray(familiesContainer?.Union) ? familiesContainer.Union :
-    familiesContainer?.Union ? [familiesContainer.Union] : []) as any[];
+  const families1 = Array.isArray(familiesContainer?.Family) 
+    ? familiesContainer.Family 
+    : familiesContainer?.Family ? [familiesContainer.Family] : [];
+  const families2 = Array.isArray(familiesContainer?.Union) 
+    ? familiesContainer.Union 
+    : familiesContainer?.Union ? [familiesContainer.Union] : [];
+  const rawFamilies: any[] = [...families1, ...families2];
 
   // Resolve places container
   const placesContainer =
@@ -98,22 +103,36 @@ export function gnoToModel(xmlText: string): { persons: Person[]; families: Fami
     
     // Extract name - handle complex Name object structure
     let name: string | undefined;
-    const nameObj = node?.Name;
-    if (nameObj) {
-      if (typeof nameObj === "string") {
-        name = nameObj;
-      } else if (nameObj["#text"]) {
-        name = nameObj["#text"];
-      } else if (nameObj.Display) {
-        name = typeof nameObj.Display === "string" ? nameObj.Display : nameObj.Display["#text"];
-      } else if (nameObj.First || nameObj.Last) {
-        // Construct name from parts
-        const parts = [];
-        if (nameObj.First) parts.push(nameObj.First);
-        if (nameObj.Last) parts.push(nameObj.Last);
-        name = parts.join(" ");
+    
+    // Check for FirstName/LastName at node level first
+    if (node?.FirstName || node?.LastName) {
+      const parts = [];
+      if (node.FirstName) parts.push(node.FirstName);
+      if (node.LastName) parts.push(node.LastName);
+      name = parts.join(" ");
+    }
+    
+    // If not found, check Name object structure
+    if (!name) {
+      const nameObj = node?.Name;
+      if (nameObj) {
+        if (typeof nameObj === "string") {
+          name = nameObj;
+        } else if (nameObj["#text"]) {
+          name = nameObj["#text"];
+        } else if (nameObj.Display) {
+          name = typeof nameObj.Display === "string" ? nameObj.Display : nameObj.Display["#text"];
+        } else if (nameObj.First || nameObj.Last) {
+          // Construct name from parts
+          const parts = [];
+          if (nameObj.First) parts.push(nameObj.First);
+          if (nameObj.Last) parts.push(nameObj.Last);
+          name = parts.join(" ");
+        }
       }
     }
+    
+    // Fallback to other name attributes
     if (!name) {
       name = node?.["@_Name"] ?? node?.DisplayName ?? node?.FullName;
     }

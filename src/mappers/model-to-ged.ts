@@ -18,7 +18,23 @@ export function modelToGed(persons: Person[], families: Family[], places: Place[
 
   for (const p of persons) {
     lines.push(`0 @${p.id}@ INDI`);
-    if (p.name) lines.push(`1 NAME ${p.name}`);
+    if (p.name) {
+      // Parse name into given and surname parts
+      const nameParts = p.name.split(" ");
+      const givenName = nameParts[0] || "";
+      const surname = nameParts.slice(1).join(" ") || "";
+      
+      // Write NAME with GEDCOM format (given /surname/)
+      if (surname) {
+        lines.push(`1 NAME ${givenName} /${surname}/`);
+      } else {
+        lines.push(`1 NAME ${givenName}`);
+      }
+      
+      // Write GIVN and SURN sub-tags
+      if (givenName) lines.push(`2 GIVN ${givenName}`);
+      if (surname) lines.push(`2 SURN ${surname}`);
+    }
     if (p.sex && p.sex !== "U") lines.push(`1 SEX ${p.sex}`);
     for (const ev of p.events ?? []) {
       lines.push(`1 ${ev.type}`);
