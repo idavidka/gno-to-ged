@@ -1,6 +1,8 @@
-# GNO → GED converter (TypeScript)
+# @treeviz/gno-to-ged
 
 A minimal, extensible TypeScript tool to convert GenoPro `.gno` files to GEDCOM `.ged` and vice versa.
+
+> **Note:** This package was previously published as `gno-to-ged`. It has been moved to the `@treeviz` organization.
 
 Features:
 
@@ -20,7 +22,13 @@ Features:
 
 Note: GenoPro `.gno` XML schemas may vary across versions or exports. The mapper aims to handle typical containers and attributes (`GenoPro`/`Genealogy`, `Individuals`/`Persons`, `Families`/`Unions`, `Places`, `Sources`, etc.). For best fidelity, share a sample `.gno` and we can refine the mapper accordingly.
 
-## Install
+## Installation
+
+```bash
+npm install @treeviz/gno-to-ged
+```
+
+## Development
 
 ```bash
 npm i
