@@ -29,6 +29,18 @@
     "type": "git",
     "url": "git@github.com:idavidka/gno-to-ged.git"
   },
+  "author": "idavidka & @treeviz contributors",
+  "license": "MIT",
+  "keywords": [
+    "genopro",
+    "gno",
+    "gedcom",
+    "ged",
+    "converter",
+    "genealogy",
+    "family-tree",
+    "typescript"
+  ],
   "dependencies": {
     "fast-xml-parser": "^4.4.1",
     "jszip": "^3.10.1",
