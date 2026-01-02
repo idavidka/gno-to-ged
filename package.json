@@ -12,7 +12,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "README.md"
   ],
   "bin": {
     "gno-to-ged": "dist/cli-gno-to-ged.js",
