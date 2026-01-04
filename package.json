@@ -1,6 +1,6 @@
 {
   "name": "@treeviz/gno-to-ged",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "GenoPro .gno to GEDCOM .ged converter (TypeScript)",
   "type": "module",
   "main": "dist/index.js",
