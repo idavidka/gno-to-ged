@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { gnoToGed, gedToGno } from "../index";
+import { gnoToGed, gedToGno } from "../index.js";
 
 describe("GNO-to-GED Package Smoke Tests", () => {
 	describe("Module Exports", () => {
