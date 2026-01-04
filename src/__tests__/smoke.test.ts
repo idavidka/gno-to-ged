@@ -21,7 +21,9 @@ describe("GNO-to-GED Package Smoke Tests", () => {
 0 TRLR`;
 			const result = await gedToGno(gedcom);
 			expect(result).toBeDefined();
-			expect(result).toBeInstanceOf(Uint8Array);
+			// Check if it's a typed array (works across realms)
+			expect(ArrayBuffer.isView(result)).toBe(true);
+			expect(result.constructor.name).toBe("Uint8Array");
 			expect(result.length).toBeGreaterThan(0);
 		});
 
@@ -33,7 +35,9 @@ describe("GNO-to-GED Package Smoke Tests", () => {
 0 TRLR`;
 			const result = await gedToGno(gedcom);
 			expect(result).toBeDefined();
-			expect(result).toBeInstanceOf(Uint8Array);
+			// Check if it's a typed array (works across realms)
+			expect(ArrayBuffer.isView(result)).toBe(true);
+			expect(result.constructor.name).toBe("Uint8Array");
 			expect(result.length).toBeGreaterThan(0);
 			
 			// Verify XML content contains the person
@@ -53,8 +57,10 @@ describe("GNO-to-GED Package Smoke Tests", () => {
 			expect(resultGzip).toBeDefined();
 			expect(resultPlain).toBeDefined();
 			// Gzipped should typically be smaller (though not always for tiny data)
-			expect(resultGzip).toBeInstanceOf(Uint8Array);
-			expect(resultPlain).toBeInstanceOf(Uint8Array);
+			expect(ArrayBuffer.isView(resultGzip)).toBe(true);
+			expect(resultGzip.constructor.name).toBe("Uint8Array");
+			expect(ArrayBuffer.isView(resultPlain)).toBe(true);
+			expect(resultPlain.constructor.name).toBe("Uint8Array");
 		});
 	});
 
