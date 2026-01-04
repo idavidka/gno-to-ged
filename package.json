@@ -23,7 +23,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev:gno": "tsx src/cli-gno-to-ged.ts",
-    "dev:ged": "tsx src/cli-ged-to-gno.ts"
+    "dev:ged": "tsx src/cli-ged-to-gno.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "repository": {
     "type": "git",
@@ -56,6 +58,7 @@
     "@types/unzipper": "^0.10.11",
     "@types/yargs": "^17.0.33",
     "tsx": "^4.19.0",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^3.0.7"
   }
 }
