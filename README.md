@@ -1,5 +1,7 @@
 # @treeviz/gno-to-ged
 
+> Part of the [@treeviz](https://www.npmjs.com/org/treeviz) organization - A collection of tools for genealogy data processing and visualization.
+
 A minimal, extensible TypeScript tool to convert GenoPro `.gno` files to GEDCOM `.ged` and vice versa.
 
 > **Note:** This package was previously published as `gno-to-ged`. It has been moved to the `@treeviz` organization.
