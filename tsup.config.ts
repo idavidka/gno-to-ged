@@ -11,7 +11,7 @@ export default defineConfig({
 	format: ["esm"],
 	dts: true,
 	clean: true,
-	sourcemap: true,
+	sourcemap: false, // Source maps not needed for npm packages
 	splitting: false,
 	treeshake: true,
 	minify: false,
