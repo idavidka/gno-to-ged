@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
-import { gnoToGed } from "./lib/gno-to-ged.js";
+import { gnoToGed } from "./lib/gno-to-ged";
 
 const argv = await yargs(hideBin(process.argv))
   .usage("Usage: $0 <input.gno> -o <output.ged>")

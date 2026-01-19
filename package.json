@@ -21,7 +21,8 @@
     "ged-to-gno": "dist/cli-ged-to-gno.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsup",
+    "dev": "tsup --watch",
     "dev:gno": "tsx src/cli-gno-to-ged.ts",
     "dev:ged": "tsx src/cli-ged-to-gno.ts",
     "test": "vitest run",
@@ -60,6 +61,7 @@
     "@types/pako": "^2.0.4",
     "@types/unzipper": "^0.10.11",
     "@types/yargs": "^17.0.33",
+    "tsup": "^8.5.1",
     "tsx": "^4.19.0",
     "typescript": "^5.6.3",
     "vitest": "^3.0.7"

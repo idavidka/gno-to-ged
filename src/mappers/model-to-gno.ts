@@ -1,6 +1,6 @@
 import { XMLBuilder } from "fast-xml-parser";
-import type { Family, Person, Place, Source } from "../model.js";
-import { GnoFormat } from "../types.js";
+import type { Family, Person, Place, Source } from "../model";
+import { GnoFormat } from "../types";
 
 function eventToNode(
   ev: { type: string; date?: string; place?: string; placeId?: string },

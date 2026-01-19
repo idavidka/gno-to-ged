@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { maybeDecompressToText } from "../utils/compression.js";
+import { maybeDecompressToText } from "../utils/compression";
 
 /**
  * Reads a .gno file or buffer, decompresses if needed, and returns XML text.

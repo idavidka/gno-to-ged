@@ -1,4 +1,4 @@
-import type { Family, Person, Place, Source } from "../model.js";
+import type { Family, Person, Place, Source } from "../model";
 
 // Very simple GEDCOM parser; focuses on basic tags.
 export function gedToModel(ged: string): { persons: Person[]; families: Family[]; places: Place[]; sources: Source[] } {

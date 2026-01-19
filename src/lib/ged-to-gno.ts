@@ -1,7 +1,7 @@
-import { gedToModel } from "../mappers/ged-to-model.js";
-import { modelToGnoXml } from "../mappers/model-to-gno.js";
-import { GnoFormat } from "../types.js";
-import { maybeCompress } from "../utils/compression.js";
+import { gedToModel } from "../mappers/ged-to-model";
+import { modelToGnoXml } from "../mappers/model-to-gno";
+import { GnoFormat } from "../types";
+import { maybeCompress } from "../utils/compression";
 
 export interface GedToGnoOptions {
   gzip?: boolean;

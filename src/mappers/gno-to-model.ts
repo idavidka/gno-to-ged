@@ -1,5 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
-import type { Family, Person, Place, Source } from "../model.js";
+import type { Family, Person, Place, Source } from "../model";
 
 /**
  * Heuristic GNO XML → internal model mapper.

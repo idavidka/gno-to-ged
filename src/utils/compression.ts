@@ -1,6 +1,6 @@
 import { inflate, ungzip, gzip as gzipPako } from "pako";
 import JSZip from "jszip";
-import { Binary } from "../types.js";
+import { Binary } from "../types";
 
 function getArray(buf: Binary): Uint8Array {
   return buf instanceof Uint8Array ? buf : new Uint8Array(buf);

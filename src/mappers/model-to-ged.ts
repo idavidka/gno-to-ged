@@ -1,4 +1,4 @@
-import type { Family, Person, Place, Source } from "../model.js";
+import type { Family, Person, Place, Source } from "../model";
 
 /**
  * Converts the internal model to GEDCOM 5.5.1 text.

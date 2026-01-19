@@ -1,7 +1,7 @@
-import { readGnoXml } from "../sources/gno-reader.js";
-import { gnoToModel } from "../mappers/gno-to-model.js";
-import { modelToGed } from "../mappers/model-to-ged.js";
-import { Binary } from "../types.js";
+import { readGnoXml } from "../sources/gno-reader";
+import { gnoToModel } from "../mappers/gno-to-model";
+import { modelToGed } from "../mappers/model-to-ged";
+import { Binary } from "../types";
 
 /**
  * Converts a GenoPro .gno file (buffer/arraybuffer/uint8array or path) into GEDCOM text (UTF-8).

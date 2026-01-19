@@ -7,8 +7,8 @@
 		"lib": [
 			"ES2023"
 		],
-		"module": "Node16",
-		"moduleResolution": "node16",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
 		"outDir": "dist",
 		"resolveJsonModule": true,
 		"rootDir": "src",
@@ -20,7 +20,8 @@
 	"exclude": [
 		"src/**/__tests__",
 		"src/**/*.test.ts",
-		"src/**/*.spec.ts"
+		"src/**/*.spec.ts",
+		"tsup.config.ts"
 	],
 	"include": [
 		"src"
