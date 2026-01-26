@@ -36,7 +36,7 @@ export function modelToGed(
 
 	// Add FILE tag with tree name for getUniversalTreeName() to find
 	if (treeName) {
-		lines.push(`1 FILE ${treeName}`);
+		lines.push(`1 FILE ${treeName}.gno`);
 	}
 
 	// Build a map of place IDs to Place objects for quick lookup
