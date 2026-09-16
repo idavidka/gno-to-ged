@@ -26,7 +26,8 @@
     "dev:gno": "tsx src/cli-gno-to-ged.ts",
     "dev:ged": "tsx src/cli-ged-to-gno.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
   },
   "repository": {
     "type": "git",
