@@ -131,7 +131,9 @@ function buildGenoProXml(
       node.Pictures = {
         Picture: person.pictures.map((picture) => {
           const item: any = { "@_ID": picture.id };
-          if (picture.file) item["@_File"] = picture.file;
+          if (picture.file && !picture.file.startsWith("data:")) {
+            item["@_File"] = picture.file;
+          }
           if (picture.title) item.Title = picture.title;
           return item;
         }),
@@ -143,7 +145,7 @@ function buildGenoProXml(
   return {
     "?xml": { "@_version": "1.0", "@_encoding": "UTF-8" },
     GenoPro: {
-      "@_Version": "2020.0.0.1",
+      "@_Version": "3.1.0.1",
       GenoMap: {
         "@_ID": "genomap1",
         "@_Name": "Family",
