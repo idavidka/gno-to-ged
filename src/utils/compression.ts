@@ -1,29 +1,29 @@
-import { inflate, ungzip, gzip as gzipPako } from "pako";
 import JSZip from "jszip";
-import { Binary } from "../types";
+import { inflate, ungzip, gzip as gzipPako } from "pako";
+import type { Binary } from "../types";
 
 function getArray(buf: Binary): Uint8Array {
-  return buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+	return buf instanceof Uint8Array ? buf : new Uint8Array(buf);
 }
 
 /** Detect gzip via magic header (0x1F 0x8B). */
 export function isGzip(buf: Binary) {
-  const arr = getArray(buf);
-  return arr[0] === 0x1f && arr[1] === 0x8b;
+	const arr = getArray(buf);
+	return arr[0] === 0x1f && arr[1] === 0x8b;
 }
 
 /** Detect zlib via common CMF/FLG bytes (0x78 0x01/0x9C/0xDA). */
 export function isZlib(buf: Binary) {
-  const arr = getArray(buf);
-  return arr[0] === 0x78 && [0x01, 0x9c, 0xda].includes(arr[1]);
+	const arr = getArray(buf);
+	return arr[0] === 0x78 && [0x01, 0x9c, 0xda].includes(arr[1]);
 }
 
 /** Detect zip via magic header "PK\x03\x04". */
 export function isZip(buf: Binary) {
-  const arr = getArray(buf);
-  return (
-    arr[0] === 0x50 && arr[1] === 0x4b && arr[2] === 0x03 && arr[3] === 0x04
-  );
+	const arr = getArray(buf);
+	return (
+		arr[0] === 0x50 && arr[1] === 0x4b && arr[2] === 0x03 && arr[3] === 0x04
+	);
 }
 
 /**
@@ -32,22 +32,22 @@ export function isZip(buf: Binary) {
  * Falls back to raw UTF-8 if no known compression is detected.
  */
 export async function maybeDecompressToText(buf: Binary): Promise<string> {
-  const arr = getArray(buf);
-  if (isGzip(arr)) {
-    const out = ungzip(arr);
-    return new TextDecoder().decode(out);
-  }
-  if (isZlib(arr)) {
-    const out = inflate(arr);
-    return new TextDecoder().decode(out);
-  }
-  if (isZip(arr)) {
-    const zip = await JSZip.loadAsync(arr);
-    const firstName = Object.keys(zip.files)[0];
-    const firstFile = await zip.files[firstName].async("string");
-    return firstFile;
-  }
-  return new TextDecoder().decode(arr);
+	const arr = getArray(buf);
+	if (isGzip(arr)) {
+		const out = ungzip(arr);
+		return new TextDecoder().decode(out);
+	}
+	if (isZlib(arr)) {
+		const out = inflate(arr);
+		return new TextDecoder().decode(out);
+	}
+	if (isZip(arr)) {
+		const zip = await JSZip.loadAsync(arr);
+		const named = zip.file("Data.xml") ?? zip.file("data.xml");
+		const entry = named ?? zip.file(Object.keys(zip.files)[0]);
+		return (await entry?.async("string")) ?? "";
+	}
+	return new TextDecoder().decode(arr);
 }
 
 /**
@@ -57,20 +57,27 @@ export async function maybeDecompressToText(buf: Binary): Promise<string> {
  * - Otherwise, returns the input unmodified.
  */
 export async function maybeCompress(
-  buf: Uint8Array,
-  opts: { gzip?: boolean; zip?: boolean; files?: Array<{ path: string; data: Uint8Array }> } = {}
+	buf: Uint8Array,
+	opts: {
+		gzip?: boolean;
+		zip?: boolean;
+		files?: Array<{ path: string; data: Uint8Array }>;
+	} = {}
 ): Promise<Uint8Array> {
-  if (opts.gzip) {
-    const out = gzipPako(buf);
-    return out; // pako Uint8Array-t ad vissza
-  }
-  if (opts.zip) {
-    const zip = new JSZip();
-    zip.file("Data.xml", buf);
-    for (const file of opts.files ?? []) {
-      zip.file(file.path, file.data);
-    }
-    return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
-  }
-  return buf;
+	if (opts.gzip) {
+		const out = gzipPako(buf);
+		return out; // pako Uint8Array-t ad vissza
+	}
+	if (opts.zip) {
+		const zip = new JSZip();
+		zip.file("Data.xml", buf);
+		for (const file of opts.files ?? []) {
+			zip.file(file.path, file.data);
+		}
+		return zip.generateAsync({
+			type: "uint8array",
+			compression: "DEFLATE",
+		});
+	}
+	return buf;
 }
