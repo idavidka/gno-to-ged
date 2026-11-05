@@ -62,8 +62,14 @@ export function modelToGed(
 			if (surname) lines.push(`2 SURN ${surname}`);
 		}
 		if (p.sex && p.sex !== "U") lines.push(`1 SEX ${p.sex}`);
+		if (p.note) {
+			p.note.split("\n").forEach((part, index) => {
+				lines.push(`${index === 0 ? "1 NOTE" : "2 CONT"} ${part}`.trimEnd());
+			});
+		}
 		for (const ev of p.events ?? []) {
-			lines.push(`1 ${ev.type}`);
+			lines.push(`1 ${ev.type}${ev.type !== "EVEN" && ev.typeName ? ` ${ev.typeName}` : ""}`);
+			if (ev.type === "EVEN" && ev.typeName) lines.push(`2 TYPE ${ev.typeName}`);
 			if (ev.date) lines.push(`2 DATE ${ev.date}`);
 			// If there's a placeId, resolve it to the actual place with coordinates
 			if (ev.placeId && placeMap.has(ev.placeId)) {
@@ -79,6 +85,11 @@ export function modelToGed(
 				lines.push(`2 PLAC ${ev.place}`);
 			}
 		}
+		for (const picture of p.pictures ?? []) {
+			lines.push("1 OBJE");
+			if (picture.file) lines.push(`2 FILE ${picture.file}`);
+			if (picture.title) lines.push(`2 TITL ${picture.title}`);
+		}
 		for (const famc of p.famc ?? []) lines.push(`1 FAMC @${famc}@`);
 		for (const fams of p.fams ?? []) lines.push(`1 FAMS @${fams}@`);
 	}
@@ -88,6 +99,12 @@ export function modelToGed(
 		if (f.husb) lines.push(`1 HUSB @${f.husb}@`);
 		if (f.wife) lines.push(`1 WIFE @${f.wife}@`);
 		for (const c of f.chil ?? []) lines.push(`1 CHIL @${c}@`);
+		for (const ev of f.events ?? []) {
+			lines.push(`1 ${ev.type}`);
+			if (ev.date) lines.push(`2 DATE ${ev.date}`);
+			if (ev.place) lines.push(`2 PLAC ${ev.place}`);
+		}
+		if (f.note) lines.push(`1 NOTE ${f.note}`);
 	}
 
 	// Output source records

@@ -29,12 +29,14 @@ export function gnoToModel(xmlText: string): { persons: Person[]; families: Fami
   const root = parser.parse(xmlText);
 
   // Resolve the likely root object
+  const geno = root.GenoPro ?? root;
   const rootObj =
-    root.GenoPro?.Genealogy ??
-    root.GenoPro ??
+    geno.Genealogy ??
+    geno.GenoMap ??
+    geno.genealogy ??
     root.Genealogy ??
     root.genealogy ??
-    root;
+    geno;
 
   // Resolve individuals container
   const individualsContainer =
@@ -165,11 +167,43 @@ export function gnoToModel(xmlText: string): { persons: Person[]; families: Fami
       });
     }
 
+    const pushEvent = (type: string, node: any) => {
+      if (!node) return;
+      const placeValue = node?.["@_Place"] ?? node?.Place ?? node?.place;
+      events.push({
+        type,
+        typeName: node?.["@_Type"] ?? node?.Type ?? node?.Description,
+        date: node?.["@_Date"] ?? node?.Date ?? node?.date,
+        place: placeValue,
+        note: node?.Comment ?? node?.Note,
+      });
+    };
+    pushEvent("CHR", node?.Baptism);
+    pushEvent("BURI", node?.Burial);
+    const occupations = node?.Occupations?.Occupation;
+    (Array.isArray(occupations) ? occupations : occupations ? [occupations] : []).forEach((item: any) => {
+      pushEvent("OCCU", item);
+    });
+    const custom = node?.Events?.Event;
+    (Array.isArray(custom) ? custom : custom ? [custom] : []).forEach((item: any) => {
+      pushEvent(item?.["@_Tag"] ?? item?.["@_Type"] ?? "EVEN", item);
+    });
+
+    const pictureNodes = node?.Pictures?.Picture;
+    const pictures = (Array.isArray(pictureNodes) ? pictureNodes : pictureNodes ? [pictureNodes] : []).map((item: any, pictureIndex: number) => ({
+      id: item?.["@_ID"] ?? `${id}-pic${pictureIndex + 1}`,
+      file: item?.["@_File"] ?? item?.File,
+      title: item?.Title ?? item?.["@_Title"],
+    }));
+    const note = node?.Comment ?? node?.Note;
+
     return {
       id,
       name,
       sex,
-      events
+      note: typeof note === "string" ? note : undefined,
+      events,
+      pictures
     };
   });
 

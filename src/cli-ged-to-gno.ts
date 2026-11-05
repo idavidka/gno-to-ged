@@ -51,10 +51,11 @@ if (!argv.in) {
 
 try {
   const gedText = await fs.readFile(argv.in as string, "utf8");
+  const outPath = argv.out as string;
   const gno = await gedToGno(gedText, {
     format: argv.format as GnoFormat,
     gzip: argv.gzip,
-    zip: argv.zip,
+    zip: argv.zip || (outPath.toLowerCase().endsWith(".gno") && !argv.gzip),
   });
   await fs.writeFile(argv.out as string, gno);
   console.log(

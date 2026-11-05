@@ -1,4 +1,4 @@
-import { gedToModel } from "../mappers/ged-to-model";
+import { collectPictureFiles, gedToModel } from "../mappers/ged-to-model";
 import { modelToGnoXml } from "../mappers/model-to-gno";
 import { GnoFormat } from "../types";
 import { maybeCompress } from "../utils/compression";
@@ -23,5 +23,8 @@ export async function gedToGno(
   );
   const encoder = new TextEncoder();
   const arr = encoder.encode(xml);
-  return maybeCompress(arr, opts);
+  return maybeCompress(arr, {
+    ...opts,
+    files: collectPictureFiles(model.persons),
+  });
 }

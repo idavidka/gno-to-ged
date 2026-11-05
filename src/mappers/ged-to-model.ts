@@ -1,200 +1,412 @@
-import type { Family, Person, Place, Source } from "../model";
+import type { Event, Family, Person, Picture, Place, Source, SourceCitation } from "../model";
 
-// Very simple GEDCOM parser; focuses on basic tags.
-export function gedToModel(ged: string): { persons: Person[]; families: Family[]; places: Place[]; sources: Source[] } {
+const INDI_STRUCTURAL = new Set([
+  "NAME",
+  "SEX",
+  "FAMC",
+  "FAMS",
+  "NOTE",
+  "OBJE",
+  "SOUR",
+  "RIN",
+  "CHAN",
+  "REFN",
+  "ALIA",
+  "ASSO",
+  "SUBM",
+  "ANCI",
+  "DESI",
+  "RESN",
+  "NCHI",
+  "NMR",
+  "_UID",
+]);
+
+const FAM_STRUCTURAL = new Set([
+  "HUSB",
+  "WIFE",
+  "CHIL",
+  "NOTE",
+  "OBJE",
+  "SOUR",
+  "RIN",
+  "CHAN",
+  "REFN",
+  "_UID",
+]);
+
+type TextField = {
+  get: () => string | undefined;
+  set: (value: string) => void;
+};
+
+const decodeDataUrl = (value: string): Uint8Array | undefined => {
+  const marker = "base64,";
+  const idx = value.startsWith("data:") ? value.indexOf(marker) : -1;
+  if (idx < 0) return undefined;
+  const binary = atob(value.slice(idx + marker.length));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+};
+
+const extensionFor = (file: string | undefined): string => {
+  const match = file?.match(/\.([a-z0-9]{2,5})(?:$|\?)/i);
+  return match?.[1]?.toLowerCase() || "bin";
+};
+
+/**
+ * Read a GEDCOM into the internal model.
+ * Keeps every individual and family event, notes, source records, and pictures.
+ */
+export function gedToModel(ged: string): {
+  persons: Person[];
+  families: Family[];
+  places: Place[];
+  sources: Source[];
+} {
   const lines = ged.replace(/\r\n/g, "\n").split("\n");
   const persons: Person[] = [];
   const families: Family[] = [];
-  const places: Place[] = [];
   const sources: Source[] = [];
+  const pictures: Picture[] = [];
 
-  let current: { type?: "INDI" | "FAM" | "SOUR"; id?: string } = {};
-  let currPerson: Person | undefined;
-  let currFamily: Family | undefined;
-  let currSource: Source | undefined;
-  let currEventTag: string | undefined;
+  let record: "INDI" | "FAM" | "SOUR" | "OBJE" | undefined;
+  let person: Person | undefined;
+  let family: Family | undefined;
+  let source: Source | undefined;
+  let picture: Picture | undefined;
+  let event: Event | undefined;
+  let text: TextField | undefined;
+  let placeName: string | undefined;
+  let lat: string | undefined;
+  let long: string | undefined;
   let inMap = false;
-  let currPlaceName: string | undefined;
-  let currLat: string | undefined;
-  let currLong: string | undefined;
-  let inName = false;
-  let currGivenName: string | undefined;
-  let currSurname: string | undefined;
 
-  function flush() {
-    if (current.type === "INDI" && currPerson) persons.push(currPerson);
-    if (current.type === "FAM" && currFamily) families.push(currFamily);
-    if (current.type === "SOUR" && currSource) sources.push(currSource);
-    current = {};
-    currPerson = undefined;
-    currFamily = undefined;
-    currSource = undefined;
-    currEventTag = undefined;
+  const rememberPlace = () => {
+    if (!event || !placeName) return;
+    if (lat || long) {
+      event.placeId = `place-${placesKey(placeName, lat, long)}`;
+    }
+  };
+
+  const flush = () => {
+    rememberPlace();
+    if (record === "INDI" && person) persons.push(person);
+    if (record === "FAM" && family) families.push(family);
+    if (record === "SOUR" && source) sources.push(source);
+    if (record === "OBJE" && picture) pictures.push(picture);
+    record = undefined;
+    person = undefined;
+    family = undefined;
+    source = undefined;
+    picture = undefined;
+    event = undefined;
+    text = undefined;
+    placeName = undefined;
+    lat = undefined;
+    long = undefined;
     inMap = false;
-    currPlaceName = undefined;
-    currLat = undefined;
-    currLong = undefined;
-    inName = false;
-    currGivenName = undefined;
-    currSurname = undefined;
-  }
+  };
+
+  const setText = (field: TextField) => {
+    text = field;
+  };
 
   for (const raw of lines) {
-    const line = raw.trim();
-    if (!line) continue;
-
-    const levelMatch = /^(\d+)\s+(.*)$/.exec(line);
+    const line = raw.replace(/^\uFEFF/, "");
+    if (!line.trim()) continue;
+    const levelMatch = /^(\d+)\s+(.*)$/.exec(line.trim());
     if (!levelMatch) continue;
     const level = Number(levelMatch[1]);
     const rest = levelMatch[2];
 
-    // New record
     if (level === 0) {
-      if (current.type) flush();
-      const m = /^@([^@]+)@\s+(INDI|FAM|SOUR)/.exec(rest);
-      if (m) {
-        const recordType = m[2];
-        current.id = m[1];
-        if (recordType === "INDI") {
-          current.type = "INDI";
-          currPerson = { id: current.id, events: [] };
-        } else if (recordType === "FAM") {
-          current.type = "FAM";
-          currFamily = { id: current.id, chil: [] };
-        } else if (recordType === "SOUR") {
-          current.type = "SOUR";
-          currSource = { id: current.id };
-        }
-      } else {
-        current = {};
-      }
-      currEventTag = undefined;
+      flush();
+      const recordMatch = /^@([^@]+)@\s+(INDI|FAM|SOUR|OBJE)/.exec(rest);
+      if (!recordMatch) continue;
+      const id = recordMatch[1];
+      record = recordMatch[2] as typeof record;
+      if (record === "INDI") person = { id, events: [], pictures: [] };
+      else if (record === "FAM") family = { id, chil: [], events: [] };
+      else if (record === "SOUR") source = { id };
+      else picture = { id };
       continue;
     }
 
-    if (current.type === "INDI" && currPerson) {
-      if (level === 1) {
-        const mName = /^NAME\s+(.+)$/.exec(rest);
-        if (mName) { 
-          // Parse the name value, stripping GEDCOM slashes if present
-          let nameValue = mName[1];
-          // Extract surname from /surname/ format if present
-          const surnameMatch = /\/([^\/]+)\//.exec(nameValue);
-          if (surnameMatch) {
-            currSurname = surnameMatch[1];
-            // Remove /surname/ from the name to get given name
-            const givenPart = nameValue.replace(/\/[^\/]+\//, "").trim();
-            currGivenName = givenPart;
-            // Store as "Given Surname" format
-            nameValue = givenPart ? `${givenPart} ${currSurname}` : currSurname;
-          }
-          currPerson.name = nameValue;
-          inName = true;
-          continue; 
-        }
-
-        const mSex = /^SEX\s+([MFU])$/.exec(rest);
-        if (mSex) { currPerson.sex = mSex[1] as any; inName = false; continue; }
-
-        const mFamc = /^FAMC\s+@([^@]+)@$/.exec(rest);
-        if (mFamc) { currPerson.famc = [...(currPerson.famc ?? []), mFamc[1]]; inName = false; continue; }
-
-        const mFams = /^FAMS\s+@([^@]+)@$/.exec(rest);
-        if (mFams) { currPerson.fams = [...(currPerson.fams ?? []), mFams[1]]; inName = false; continue; }
-
-        const mEvent = /^(BIRT|DEAT|EVEN|CHR|BAPM|BURI|MARR|DIV)$/.exec(rest);
-        if (mEvent) {
-          currEventTag = mEvent[1];
-          currPerson.events!.push({ type: currEventTag });
-          inMap = false;
-          inName = false;
-          currPlaceName = undefined;
-          currLat = undefined;
-          currLong = undefined;
-          continue;
-        }
-        currEventTag = undefined;
-        inName = false;
-      } else if (level === 2 && inName) {
-        // Handle GIVN and SURN sub-tags under NAME
-        const mGivn = /^GIVN\s+(.+)$/.exec(rest);
-        if (mGivn) {
-          currGivenName = mGivn[1];
-          // Reconstruct name from GIVN and SURN if we have both
-          if (currGivenName && currSurname) {
-            currPerson.name = `${currGivenName} ${currSurname}`;
-          } else if (currGivenName) {
-            currPerson.name = currGivenName;
-          }
-          continue;
-        }
-        
-        const mSurn = /^SURN\s+(.+)$/.exec(rest);
-        if (mSurn) {
-          currSurname = mSurn[1];
-          // Reconstruct name from GIVN and SURN if we have both
-          if (currGivenName && currSurname) {
-            currPerson.name = `${currGivenName} ${currSurname}`;
-          } else if (currSurname) {
-            currPerson.name = currSurname;
-          }
-          continue;
-        }
-      } else if (level === 2 && currEventTag) {
-        const lastEv = currPerson.events![currPerson.events!.length - 1];
-        const mDate = /^DATE\s+(.+)$/.exec(rest);
-        if (mDate && lastEv) { lastEv.date = mDate[1]; continue; }
-        const mPlac = /^PLAC\s+(.+)$/.exec(rest);
-        if (mPlac && lastEv) { 
-          lastEv.place = mPlac[1]; 
-          currPlaceName = mPlac[1];
-          continue; 
-        }
-      } else if (level === 3 && currEventTag) {
-        const mMap = /^MAP$/.exec(rest);
-        if (mMap) { inMap = true; continue; }
-      } else if (level === 4 && inMap && currEventTag) {
-        const mLati = /^LATI\s+(.+)$/.exec(rest);
-        if (mLati) { currLat = mLati[1]; continue; }
-        const mLong = /^LONG\s+(.+)$/.exec(rest);
-        if (mLong) { currLong = mLong[1]; continue; }
-      }
+    if (level === 2 && /^(CONC|CONT)\b/.test(rest)) {
+      const piece = rest.replace(/^(CONC|CONT)\s?/, "");
+      if (!text) continue;
+      const prev = text.get() ?? "";
+      text.set(rest.startsWith("CONC") ? prev + piece : `${prev}${prev ? "\n" : ""}${piece}`);
+      continue;
     }
 
-    if (current.type === "FAM" && currFamily) {
+    if (record === "INDI" && person) {
       if (level === 1) {
-        const mH = /^HUSB\s+@([^@]+)@$/.exec(rest);
-        if (mH) { currFamily.husb = mH[1]; continue; }
-        const mW = /^WIFE\s+@([^@]+)@$/.exec(rest);
-        if (mW) { currFamily.wife = mW[1]; continue; }
-        const mC = /^CHIL\s+@([^@]+)@$/.exec(rest);
-        if (mC) { currFamily.chil!.push(mC[1]); continue; }
+        event = undefined;
+        inMap = false;
+        const tagMatch = /^([A-Z0-9_]+)(?:\s+(.*))?$/.exec(rest);
+        if (!tagMatch) continue;
+        const tag = tagMatch[1];
+        const value = tagMatch[2];
+        if (tag === "NAME") {
+          const surnameMatch = value ? /\/([^/]*)\//.exec(value) : undefined;
+          const surname = surnameMatch?.[1]?.trim();
+          const given = value?.replace(/\/[^/]*\//, "").trim();
+          person.given = given || undefined;
+          person.surname = surname || undefined;
+          person.name = [given, surname].filter(Boolean).join(" ") || value;
+          setText({
+            get: () => person!.name,
+            set: (next) => {
+              person!.name = next;
+            },
+          });
+          continue;
+        }
+        if (tag === "SEX" && value && /^[MFU]$/.test(value)) {
+          person.sex = value as Person["sex"];
+          continue;
+        }
+        if (tag === "FAMC" && value) {
+          const id = value.replace(/@/g, "");
+          person.famc = [...(person.famc ?? []), id];
+          continue;
+        }
+        if (tag === "FAMS" && value) {
+          const id = value.replace(/@/g, "");
+          person.fams = [...(person.fams ?? []), id];
+          continue;
+        }
+        if (tag === "NOTE") {
+          person.note = value ?? "";
+          setText({
+            get: () => person!.note,
+            set: (next) => {
+              person!.note = next;
+            },
+          });
+          continue;
+        }
+        if (tag === "OBJE") {
+          const linked = value?.match(/^@([^@]+)@$/)?.[1];
+          const pic: Picture = { id: linked || `${person.id}-pic${person.pictures!.length + 1}` };
+          person.pictures!.push(pic);
+          picture = pic;
+          continue;
+        }
+        if (INDI_STRUCTURAL.has(tag)) {
+          picture = undefined;
+          continue;
+        }
+        picture = undefined;
+        event = { type: tag, typeName: value };
+        person.events!.push(event);
+        if (value) {
+          setText({
+            get: () => event!.typeName,
+            set: (next) => {
+              event!.typeName = next;
+            },
+          });
+        }
+      } else if (level === 2 && rest.startsWith("GIVN ") && person) {
+        person.given = rest.slice(5);
+        person.name = [person.given, person.surname].filter(Boolean).join(" ");
+      } else if (level === 2 && rest.startsWith("SURN ")) {
+        person.surname = rest.slice(5);
+        person.name = [person.given, person.surname].filter(Boolean).join(" ");
+      } else if (event && level >= 2) {
+        applyEventLine(event, level, rest, () => {
+          inMap = true;
+        }, (field) => {
+          text = field;
+        }, (name) => {
+          placeName = name;
+        }, (value, which) => {
+          if (which === "lat") event!.lat = value;
+          else event!.long = value;
+          if (which === "lat") lat = value;
+          else long = value;
+        });
+      } else if (picture && level === 2) {
+        applyPictureLine(picture, rest, (field) => {
+          text = field;
+        });
       }
+      continue;
     }
 
-    if (current.type === "SOUR" && currSource) {
+    if (record === "FAM" && family) {
       if (level === 1) {
-        const mTitle = /^TITL\s+(.+)$/.exec(rest);
-        if (mTitle) { currSource.title = mTitle[1]; continue; }
-        const mAuth = /^AUTH\s+(.+)$/.exec(rest);
-        if (mAuth) { currSource.author = mAuth[1]; continue; }
-        const mPubl = /^PUBL\s+(.+)$/.exec(rest);
-        if (mPubl) { currSource.publication = mPubl[1]; continue; }
+        event = undefined;
+        const tagMatch = /^([A-Z0-9_]+)(?:\s+(.*))?$/.exec(rest);
+        if (!tagMatch) continue;
+        const tag = tagMatch[1];
+        const value = tagMatch[2];
+        if (tag === "HUSB" && value) {
+          family.husb = value.replace(/@/g, "");
+          continue;
+        }
+        if (tag === "WIFE" && value) {
+          family.wife = value.replace(/@/g, "");
+          continue;
+        }
+        if (tag === "CHIL" && value) {
+          family.chil!.push(value.replace(/@/g, ""));
+          continue;
+        }
+        if (tag === "NOTE") {
+          family.note = value ?? "";
+          setText({
+            get: () => family!.note,
+            set: (next) => {
+              family!.note = next;
+            },
+          });
+          continue;
+        }
+        if (FAM_STRUCTURAL.has(tag)) continue;
+        event = { type: tag, typeName: value };
+        family.events!.push(event);
+      } else if (event) {
+        applyEventLine(event, level, rest, () => {
+          inMap = true;
+        }, (field) => {
+          text = field;
+        }, (name) => {
+          placeName = name;
+        }, (value, which) => {
+          if (which === "lat") lat = value;
+          else long = value;
+        });
       }
+      continue;
+    }
+
+    if (record === "SOUR" && source && level === 1) {
+      const tagMatch = /^([A-Z0-9_]+)(?:\s+(.*))?$/.exec(rest);
+      if (!tagMatch) continue;
+      const value = tagMatch[2] ?? "";
+      if (tagMatch[1] === "TITL") {
+        source.title = value;
+        setText({ get: () => source!.title, set: (next) => { source!.title = next; } });
+      } else if (tagMatch[1] === "AUTH") {
+        source.author = value;
+        setText({ get: () => source!.author, set: (next) => { source!.author = next; } });
+      } else if (tagMatch[1] === "PUBL" || tagMatch[1] === "TEXT") {
+        source.publication = value;
+        setText({ get: () => source!.publication, set: (next) => { source!.publication = next; } });
+      }
+      continue;
+    }
+
+    if (record === "OBJE" && picture && level === 1) {
+      applyPictureLine(picture, rest, (field) => {
+        text = field;
+      });
     }
   }
-  if (current.type) flush();
+  flush();
 
-  // Extract unique places from events with coordinates
   const placeMap = new Map<string, Place>();
-  persons.forEach(p => {
-    p.events?.forEach(ev => {
-      if (ev.place) {
-        // For now, we don't extract places from GEDCOM back to Place records
-        // as places in GEDCOM are inline, not separate records
+  const takePlaces = (events: Event[] | undefined) => {
+    events?.forEach((item) => {
+      if (!item.place && !item.lat && !item.long) return;
+      const name = item.place || "Place";
+      const id = `place-${placesKey(name, item.lat, item.long)}`;
+      item.placeId = id;
+      if (!placeMap.has(id)) {
+        placeMap.set(id, { id, name, lat: item.lat, long: item.long });
       }
     });
+  };
+  const loosePictures = new Map(pictures.map((item) => [item.id, item]));
+  persons.forEach((item) => {
+    takePlaces(item.events);
+    item.pictures = (item.pictures ?? []).map((pic) => {
+      const full = loosePictures.get(pic.id);
+      const merged = full ? { ...full, ...pic, file: pic.file || full.file, bytes: pic.bytes || full.bytes, title: pic.title || full.title } : pic;
+      if (merged.bytes && !merged.file?.startsWith("media/")) {
+        merged.file = `media/${merged.id}.${extensionFor(merged.file)}`;
+      }
+      return merged;
+    });
   });
+  families.forEach((item) => takePlaces(item.events));
 
-  return { persons, families, places: Array.from(placeMap.values()), sources };
+  return { persons, families, places: [...placeMap.values()], sources };
 }
+
+const placesKey = (name: string, lat?: string, long?: string) =>
+  `${name}|${lat ?? ""}|${long ?? ""}`.replace(/\s+/g, "-");
+
+const applyEventLine = (
+  event: Event,
+  level: number,
+  rest: string,
+  onMap: () => void,
+  onText: (field: TextField) => void,
+  onPlace: (name: string) => void,
+  onCoord: (value: string, which: "lat" | "long") => void
+) => {
+  if (level !== 2 && level !== 4) {
+    if (level === 3 && rest === "MAP") onMap();
+    return;
+  }
+  const tagMatch = /^([A-Z0-9_]+)(?:\s+(.*))?$/.exec(rest);
+  if (!tagMatch) return;
+  const tag = tagMatch[1];
+  const value = tagMatch[2] ?? "";
+  if (level === 2 && tag === "DATE") {
+    event.date = value;
+    onText({ get: () => event.date, set: (next) => { event.date = next; } });
+  } else if (level === 2 && tag === "PLAC") {
+    event.place = value;
+    onPlace(value);
+    onText({ get: () => event.place, set: (next) => { event.place = next; } });
+  } else if (level === 2 && tag === "TYPE") {
+    event.typeName = value;
+    onText({ get: () => event.typeName, set: (next) => { event.typeName = next; } });
+  } else if (level === 2 && tag === "NOTE") {
+    event.note = value;
+    onText({ get: () => event.note, set: (next) => { event.note = next; } });
+  } else if (level === 4 && tag === "LATI") {
+    onCoord(value, "lat");
+  } else if (level === 4 && tag === "LONG") {
+    onCoord(value, "long");
+  }
+};
+
+const applyPictureLine = (
+  picture: Picture,
+  rest: string,
+  onText: (field: TextField) => void
+) => {
+  const tagMatch = /^([A-Z0-9_]+)(?:\s+(.*))?$/.exec(rest);
+  if (!tagMatch) return;
+  const value = tagMatch[2] ?? "";
+  if (tagMatch[1] === "FILE") {
+    const bytes = decodeDataUrl(value);
+    if (bytes) {
+      picture.bytes = bytes;
+      picture.file = `media/${picture.id}.bin`;
+    } else {
+      picture.file = value;
+    }
+    onText({ get: () => picture.file, set: (next) => { picture.file = next; } });
+  } else if (tagMatch[1] === "TITL") {
+    picture.title = value;
+    onText({ get: () => picture.title, set: (next) => { picture.title = next; } });
+  } else if (tagMatch[1] === "FORM" && picture.file?.endsWith(".bin")) {
+    picture.file = `media/${picture.id}.${value.toLowerCase()}`;
+  }
+};
+
+export const collectPictureFiles = (persons: Person[]): Array<{ path: string; data: Uint8Array }> =>
+  persons.flatMap((person) =>
+    (person.pictures ?? []).flatMap((picture) =>
+      picture.bytes && picture.file ? [{ path: picture.file, data: picture.bytes }] : []
+    )
+  );

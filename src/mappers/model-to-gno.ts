@@ -33,68 +33,159 @@ function eventToNode(
   }
 }
 
+const eventElement = (ev: { type: string; typeName?: string; date?: string; place?: string; note?: string }) => {
+  const node: any = {};
+  if (ev.typeName && ev.type === "EVEN") node["@_Type"] = ev.typeName;
+  else if (ev.typeName && ev.type !== "OCCU") node["@_Type"] = ev.typeName;
+  if (ev.date) node.Date = ev.date;
+  if (ev.place) node.Place = ev.place;
+  if (ev.note) node.Comment = ev.note;
+  if (ev.type === "OCCU" && ev.typeName) node.Description = ev.typeName;
+  return node;
+};
+
+const layoutPositions = (persons: Person[], families: Family[]) => {
+  const byId = new Map(persons.map((person) => [person.id, person]));
+  const generation = new Map<string, number>();
+  const rank = (id: string, seen: Set<string>): number => {
+    const known = generation.get(id);
+    if (known !== undefined) return known;
+    if (seen.has(id)) return 0;
+    seen.add(id);
+    const person = byId.get(id);
+    const parentFamilies = (person?.famc ?? [])
+      .map((familyId) => families.find((family) => family.id === familyId))
+      .filter((family): family is Family => !!family);
+    const parentIds = parentFamilies.flatMap((family) => [family.husb, family.wife].filter((item): item is string => !!item));
+    const value = parentIds.length
+      ? Math.max(...parentIds.map((parentId) => rank(parentId, seen))) + 1
+      : 0;
+    generation.set(id, value);
+    return value;
+  };
+  persons.forEach((person) => rank(person.id, new Set()));
+  const columns = new Map<number, number>();
+  const positions = new Map<string, string>();
+  persons.forEach((person) => {
+    const row = generation.get(person.id) ?? 0;
+    const column = columns.get(row) ?? 0;
+    columns.set(row, column + 1);
+    positions.set(person.id, `${column * 220},${row * 160}`);
+  });
+  return positions;
+};
+
 function buildGenoProXml(
   persons: Person[],
   families: Family[],
   places: Place[],
   sources: Source[]
 ): any {
-  const root: any = {
-    "?xml": {
-      "@_version": "1.0",
-      "@_encoding": "UTF-8",
-    },
+  const positions = layoutPositions(persons, families);
+  const marriages = families.map((family) => ({
+    id: `marriage-${family.id}`,
+    family,
+    marriage: family.events?.find((event) => event.type === "MARR"),
+    divorce: family.events?.find((event) => event.type === "DIV"),
+  }));
+  const pedigree: any[] = [];
+  families.forEach((family) => {
+    if (family.husb) {
+      pedigree.push({ "@_PedigreeLink": "Parent", "@_Family": family.id, "@_Individual": family.husb });
+    }
+    if (family.wife) {
+      pedigree.push({ "@_PedigreeLink": "Parent", "@_Family": family.id, "@_Individual": family.wife });
+    }
+    family.chil?.forEach((childId) => {
+      pedigree.push({ "@_PedigreeLink": "Biological", "@_Family": family.id, "@_Individual": childId });
+    });
+  });
+
+  const individuals = persons.map((person) => {
+    const node: any = {
+      "@_ID": person.id,
+      Position: positions.get(person.id) ?? "0,0",
+    };
+    if (person.sex === "M" || person.sex === "F") node.Gender = person.sex;
+    if (person.given) node.FirstName = person.given;
+    if (person.surname) node.LastName = person.surname;
+    if (person.name) node.Name = person.name;
+    if (person.note) node.Comment = person.note;
+
+    const extra: any[] = [];
+    person.events?.forEach((event) => {
+      const body = eventElement(event);
+      if (event.type === "BIRT" && !node.Birth) node.Birth = body;
+      else if (event.type === "DEAT" && !node.Death) node.Death = body;
+      else if ((event.type === "CHR" || event.type === "BAPM") && !node.Baptism) node.Baptism = body;
+      else if (event.type === "BURI" && !node.Burial) node.Burial = body;
+      else if (event.type === "OCCU") {
+        node.Occupations = node.Occupations ?? { Occupation: [] };
+        node.Occupations.Occupation.push(body);
+      } else {
+        extra.push({ "@_Type": event.typeName || event.type, ...body, "@_Tag": event.type });
+      }
+    });
+    if (extra.length) node.Events = { Event: extra };
+    if (person.pictures?.length) {
+      node.Pictures = {
+        Picture: person.pictures.map((picture) => {
+          const item: any = { "@_ID": picture.id };
+          if (picture.file) item["@_File"] = picture.file;
+          if (picture.title) item.Title = picture.title;
+          return item;
+        }),
+      };
+    }
+    return node;
+  });
+
+  return {
+    "?xml": { "@_version": "1.0", "@_encoding": "UTF-8" },
     GenoPro: {
-      "@_xmlns": "http://genopro.com/",
-      "@_xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
       "@_Version": "2020.0.0.1",
-      Genealogy: {
-        Individuals: { Individual: [] as any[] },
-        Families: { Family: [] as any[] },
-        Places: { Place: [] as any[] },
-        Sources: { Source: [] as any[] },
+      GenoMap: {
+        "@_ID": "genomap1",
+        "@_Name": "Family",
+        Individuals: { Individual: individuals },
+        Families: {
+          Family: families.map((family, index) => ({
+            "@_ID": family.id,
+            ...(family.husb ? { "@_Husband": family.husb } : {}),
+            ...(family.wife ? { "@_Wife": family.wife } : {}),
+            Position: `${index * 220},80`,
+            Unions: `marriage-${family.id}`,
+            Children: { Child: (family.chil ?? []).map((id) => ({ "@_Ref": id })) },
+            ...(family.note ? { Comment: family.note } : {}),
+          })),
+        },
+        Marriages: {
+          Marriage: marriages.map((item) => ({
+            "@_ID": item.id,
+            ...eventElement(item.marriage ?? { type: "MARR" }),
+            ...(item.divorce?.date ? { Divorce: { Date: item.divorce.date } } : {}),
+          })),
+        },
+        PedigreeLinks: { PedigreeLink: pedigree },
+        Places: {
+          Place: places.map((place) => ({
+            "@_ID": place.id,
+            "@_Name": place.name,
+            ...(place.lat ? { "@_Lat": place.lat } : {}),
+            ...(place.long ? { "@_Long": place.long } : {}),
+          })),
+        },
+        Sources: {
+          Source: sources.map((source) => ({
+            "@_ID": source.id,
+            ...(source.title ? { "@_Title": source.title } : {}),
+            ...(source.author ? { "@_Author": source.author } : {}),
+            ...(source.publication ? { "@_Publication": source.publication } : {}),
+          })),
+        },
       },
     },
   };
-
-  for (const p of persons) {
-    const node: any = { "@_ID": p.id };
-    if (p.name) node["@_Name"] = p.name;
-    if (p.sex && p.sex !== "U") node["@_Sex"] = p.sex;
-    if (p.events?.length) {
-      for (const ev of p.events) {
-        Object.assign(node, eventToNode(ev, "genopro"));
-      }
-    }
-    root.GenoPro.Genealogy.Individuals.Individual.push(node);
-  }
-
-  for (const f of families) {
-    const node: any = { "@_ID": f.id };
-    if (f.husb) node["@_Husband"] = f.husb;
-    if (f.wife) node["@_Wife"] = f.wife;
-    if (f.chil?.length) {
-      node.Children = { Child: f.chil.map((id) => ({ "@_Ref": id })) };
-    }
-    root.GenoPro.Genealogy.Families.Family.push(node);
-  }
-
-  for (const place of places) {
-    const node: any = { "@_ID": place.id, "@_Name": place.name };
-    if (place.lat) node["@_Lat"] = place.lat;
-    if (place.long) node["@_Long"] = place.long;
-    root.GenoPro.Genealogy.Places.Place.push(node);
-  }
-
-  for (const source of sources) {
-    const node: any = { "@_ID": source.id };
-    if (source.title) node["@_Title"] = source.title;
-    if (source.author) node["@_Author"] = source.author;
-    if (source.publication) node["@_Publication"] = source.publication;
-    root.GenoPro.Genealogy.Sources.Source.push(node);
-  }
-
-  return root;
 }
 
 function buildGrampsXml(

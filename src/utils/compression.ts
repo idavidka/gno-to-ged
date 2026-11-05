@@ -58,16 +58,19 @@ export async function maybeDecompressToText(buf: Binary): Promise<string> {
  */
 export async function maybeCompress(
   buf: Uint8Array,
-  opts: { gzip?: boolean; zip?: boolean } = {}
+  opts: { gzip?: boolean; zip?: boolean; files?: Array<{ path: string; data: Uint8Array }> } = {}
 ): Promise<Uint8Array> {
   if (opts.gzip) {
     const out = gzipPako(buf);
     return out; // pako Uint8Array-t ad vissza
   }
   if (opts.zip) {
-    throw new Error(
-      "ZIP output not implemented yet. Use { gzip: true } or ask me to add ZIP support."
-    );
+    const zip = new JSZip();
+    zip.file("Data.xml", buf);
+    for (const file of opts.files ?? []) {
+      zip.file(file.path, file.data);
+    }
+    return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
   }
   return buf;
 }
