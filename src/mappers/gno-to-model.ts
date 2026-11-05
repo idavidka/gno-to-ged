@@ -30,13 +30,8 @@ export function gnoToModel(xmlText: string): { persons: Person[]; families: Fami
 
   // Resolve the likely root object
   const geno = root.GenoPro ?? root;
-  const rootObj =
-    geno.Genealogy ??
-    geno.GenoMap ??
-    geno.genealogy ??
-    root.Genealogy ??
-    root.genealogy ??
-    geno;
+  const nested = geno.GenoMap ?? geno.Genealogy ?? geno.genealogy;
+  const rootObj = geno.Individuals || geno.Families ? geno : nested ?? geno;
 
   // Resolve individuals container
   const individualsContainer =
@@ -192,7 +187,7 @@ export function gnoToModel(xmlText: string): { persons: Person[]; families: Fami
     const pictureNodes = node?.Pictures?.Picture;
     const pictures = (Array.isArray(pictureNodes) ? pictureNodes : pictureNodes ? [pictureNodes] : []).map((item: any, pictureIndex: number) => ({
       id: item?.["@_ID"] ?? `${id}-pic${pictureIndex + 1}`,
-      file: item?.["@_File"] ?? item?.File,
+      file: item?.["@_File"] ?? item?.File ?? item?.Path?.["@_Relative"] ?? item?.Path?.Relative,
       title: item?.Title ?? item?.["@_Title"],
     }));
     const note = node?.Comment ?? node?.Note;

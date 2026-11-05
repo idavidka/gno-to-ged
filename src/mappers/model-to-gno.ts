@@ -33,12 +33,53 @@ function eventToNode(
   }
 }
 
-const eventElement = (ev: { type: string; typeName?: string; date?: string; place?: string; note?: string }) => {
+const GEDCOM_MONTHS: Record<string, string> = {
+  JAN: "Jan",
+  FEB: "Feb",
+  MAR: "Mar",
+  APR: "Apr",
+  MAY: "May",
+  JUN: "Jun",
+  JUL: "Jul",
+  AUG: "Aug",
+  SEP: "Sep",
+  OCT: "Oct",
+  NOV: "Nov",
+  DEC: "Dec",
+};
+
+const GEDCOM_QUALIFIERS: Record<string, string> = {
+  ABT: "Abt",
+  ABOUT: "Abt",
+  EST: "Est",
+  CAL: "Cal",
+  BEF: "Bef",
+  BEFORE: "Bef",
+  AFT: "Aft",
+  AFTER: "Aft",
+  BET: "Bet",
+  BETWEEN: "Bet",
+  AND: "and",
+  FROM: "From",
+  TO: "to",
+};
+
+/** GenoPro dates look like `1 Jan 1796`, not GEDCOM `01 JAN 1796`. */
+const genoDate = (value?: string) =>
+  value
+    ?.replace(/[A-Za-z]+/g, (word) => {
+      const upper = word.toUpperCase();
+      return GEDCOM_MONTHS[upper] ?? GEDCOM_QUALIFIERS[upper] ?? word;
+    })
+    .replace(/\b0(\d)\b/g, "$1");
+
+const eventElement = (ev: { type: string; typeName?: string; date?: string; place?: string; placeId?: string; note?: string }) => {
   const node: any = {};
   if (ev.typeName && ev.type === "EVEN") node["@_Type"] = ev.typeName;
   else if (ev.typeName && ev.type !== "OCCU") node["@_Type"] = ev.typeName;
-  if (ev.date) node.Date = ev.date;
-  if (ev.place) node.Place = ev.place;
+  if (ev.date) node.Date = genoDate(ev.date);
+  if (ev.placeId) node.Place = ev.placeId;
+  else if (ev.place) node.Place = ev.place;
   if (ev.note) node.Comment = ev.note;
   if (ev.type === "OCCU" && ev.typeName) node.Description = ev.typeName;
   return node;
@@ -107,16 +148,24 @@ function buildGenoProXml(
       Position: positions.get(person.id) ?? "0,0",
     };
     if (person.sex === "M" || person.sex === "F") node.Gender = person.sex;
-    if (person.given) node.FirstName = person.given;
-    if (person.surname) node.LastName = person.surname;
-    if (person.name) node.Name = person.name;
+    const fullName = person.name || [person.given, person.surname].filter(Boolean).join(" ");
+    if (fullName || person.given || person.surname) {
+      node.Name = {
+        ...(fullName ? { "#text": fullName } : {}),
+        ...(person.given ? { First: person.given } : {}),
+        ...(person.surname ? { Last: person.surname } : {}),
+      };
+    }
     if (person.note) node.Comment = person.note;
 
     const extra: any[] = [];
     person.events?.forEach((event) => {
       const body = eventElement(event);
       if (event.type === "BIRT" && !node.Birth) node.Birth = body;
-      else if (event.type === "DEAT" && !node.Death) node.Death = body;
+      else if (event.type === "DEAT" && !node.Death) {
+        node.IsDead = "Y";
+        node.Death = body;
+      }
       else if ((event.type === "CHR" || event.type === "BAPM") && !node.Baptism) node.Baptism = body;
       else if (event.type === "BURI" && !node.Burial) node.Burial = body;
       else if (event.type === "OCCU") {
@@ -132,9 +181,8 @@ function buildGenoProXml(
         Picture: person.pictures.map((picture) => {
           const item: any = { "@_ID": picture.id };
           if (picture.file && !picture.file.startsWith("data:")) {
-            item["@_File"] = picture.file;
+            item.Path = { "@_Relative": picture.file };
           }
-          if (picture.title) item.Title = picture.title;
           return item;
         }),
       };
@@ -145,47 +193,54 @@ function buildGenoProXml(
   return {
     "?xml": { "@_version": "1.0", "@_encoding": "UTF-8" },
     GenoPro: {
-      "@_Version": "3.1.0.1",
-      GenoMap: {
-        "@_ID": "genomap1",
-        "@_Name": "Family",
-        Individuals: { Individual: individuals },
-        Families: {
-          Family: families.map((family, index) => ({
-            "@_ID": family.id,
-            ...(family.husb ? { "@_Husband": family.husb } : {}),
-            ...(family.wife ? { "@_Wife": family.wife } : {}),
-            Position: `${index * 220},80`,
-            Unions: `marriage-${family.id}`,
-            Children: { Child: (family.chil ?? []).map((id) => ({ "@_Ref": id })) },
-            ...(family.note ? { Comment: family.note } : {}),
-          })),
-        },
-        Marriages: {
-          Marriage: marriages.map((item) => ({
-            "@_ID": item.id,
-            ...eventElement(item.marriage ?? { type: "MARR" }),
-            ...(item.divorce?.date ? { Divorce: { Date: item.divorce.date } } : {}),
-          })),
-        },
-        PedigreeLinks: { PedigreeLink: pedigree },
-        Places: {
-          Place: places.map((place) => ({
-            "@_ID": place.id,
-            "@_Name": place.name,
-            ...(place.lat ? { "@_Lat": place.lat } : {}),
-            ...(place.long ? { "@_Long": place.long } : {}),
-          })),
-        },
-        Sources: {
-          Source: sources.map((source) => ({
-            "@_ID": source.id,
-            ...(source.title ? { "@_Title": source.title } : {}),
-            ...(source.author ? { "@_Author": source.author } : {}),
-            ...(source.publication ? { "@_Publication": source.publication } : {}),
-          })),
-        },
+      Software: {
+        "#text": "GenoPro",
+        Version: "3.1.0.1",
       },
+      GenoMaps: {
+        GenoMap: { "@_Name": "GenoMap1" },
+      },
+      Individuals: { Individual: individuals },
+      Families: {
+        Family: families.map((family, index) => ({
+          "@_ID": family.id,
+          Position: `${index * 220},80`,
+          Unions: `marriage-${family.id}`,
+          ...(family.note ? { Comment: family.note } : {}),
+        })),
+      },
+      Marriages: {
+        Marriage: marriages.map((item) => ({
+          "@_ID": item.id,
+          ...eventElement(item.marriage ?? { type: "MARR" }),
+          ...(item.divorce?.date ? { Divorce: { Date: genoDate(item.divorce.date) } } : {}),
+        })),
+      },
+      PedigreeLinks: { PedigreeLink: pedigree },
+      ...(places.length
+        ? {
+            Places: {
+              Place: places.map((place) => ({
+                "@_ID": place.id,
+                Name: place.name,
+                ...(place.lat ? { "@_Lat": place.lat } : {}),
+                ...(place.long ? { "@_Long": place.long } : {}),
+              })),
+            },
+          }
+        : {}),
+      ...(sources.length
+        ? {
+            Sources: {
+              Source: sources.map((source) => ({
+                "@_ID": source.id,
+                ...(source.title ? { Title: source.title } : {}),
+                ...(source.author ? { Author: source.author } : {}),
+                ...(source.publication ? { Publication: source.publication } : {}),
+              })),
+            },
+          }
+        : {}),
     },
   };
 }
