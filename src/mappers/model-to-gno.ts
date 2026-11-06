@@ -85,19 +85,29 @@ const eventElement = (ev: { type: string; typeName?: string; date?: string; plac
   return node;
 };
 
-const layoutPositions = (persons: Person[], families: Family[]) => {
-  const byId = new Map(persons.map((person) => [person.id, person]));
+type Point = { x: number; y: number };
+
+const SLOT = 120;
+const GENERATION_GAP = 150;
+
+/**
+ * Spouses sit side by side over their children.
+ * GenoPro's Y axis grows upward, so ancestors get the larger Y.
+ * A family bar connects the two parents and, when there are several
+ * children, drops down toward them.
+ * In-law families are attached above the spouse they marry in, so a
+ * second root does not land on top of the blood line.
+ */
+const layoutTree = (persons: Person[], families: Family[]) => {
   const generation = new Map<string, number>();
   const rank = (id: string, seen: Set<string>): number => {
     const known = generation.get(id);
     if (known !== undefined) return known;
     if (seen.has(id)) return 0;
     seen.add(id);
-    const person = byId.get(id);
-    const parentFamilies = (person?.famc ?? [])
-      .map((familyId) => families.find((family) => family.id === familyId))
-      .filter((family): family is Family => !!family);
-    const parentIds = parentFamilies.flatMap((family) => [family.husb, family.wife].filter((item): item is string => !!item));
+    const parentIds = families
+      .filter((family) => family.chil?.includes(id))
+      .flatMap((family) => [family.husb, family.wife].filter((item): item is string => !!item));
     const value = parentIds.length
       ? Math.max(...parentIds.map((parentId) => rank(parentId, seen))) + 1
       : 0;
@@ -105,15 +115,233 @@ const layoutPositions = (persons: Person[], families: Family[]) => {
     return value;
   };
   persons.forEach((person) => rank(person.id, new Set()));
-  const columns = new Map<number, number>();
-  const positions = new Map<string, string>();
-  persons.forEach((person) => {
-    const row = generation.get(person.id) ?? 0;
-    const column = columns.get(row) ?? 0;
-    columns.set(row, column + 1);
-    positions.set(person.id, `${column * 220},${row * 160}`);
+
+  const positions = new Map<string, Point>();
+  const familyPositions = new Map<string, any>();
+  const placedFamily = new Set<string>();
+  const asParent = (id: string) =>
+    families.filter((family) => family.husb === id || family.wife === id);
+
+  const widthOfFamily = (family: Family, seen: Set<string>): number => {
+    if (seen.has(family.id)) return SLOT;
+    const next = new Set(seen);
+    next.add(family.id);
+    const children = (family.chil ?? []).reduce(
+      (sum, id) => sum + widthOfPerson(id, family.id, next),
+      0
+    );
+    const couple = (family.husb && family.wife ? 2 : 1) * SLOT;
+    return Math.max(couple, children, SLOT);
+  };
+
+  const widthOfPerson = (id: string, comingFrom: string, seen: Set<string>): number => {
+    const own = asParent(id).filter((family) => family.id !== comingFrom);
+    if (!own.length) return SLOT;
+    return Math.max(
+      SLOT,
+      own.reduce((sum, family) => sum + widthOfFamily(family, seen), 0)
+    );
+  };
+
+  const placePerson = (id: string, left: number, comingFrom: string) => {
+    const own = asParent(id).filter((family) => family.id !== comingFrom && !placedFamily.has(family.id));
+    if (!own.length) return;
+    let x = left;
+    for (const family of own) {
+      placeFamily(family, x);
+      x += widthOfFamily(family, new Set());
+    }
+  };
+
+  const placeFamily = (family: Family, left: number) => {
+    if (placedFamily.has(family.id)) return;
+    placedFamily.add(family.id);
+    const width = widthOfFamily(family, new Set());
+    const childWidths = (family.chil ?? []).map((id) => widthOfPerson(id, family.id, new Set([family.id])));
+    const children = childWidths.reduce((sum, value) => sum + value, 0);
+    let x = left + Math.max(0, (width - children) / 2);
+    const childYs: number[] = [];
+    (family.chil ?? []).forEach((id, index) => {
+      placePerson(id, x, family.id);
+      const childY = positions.get(id)?.y;
+      if (childY !== undefined) childYs.push(childY);
+      x += childWidths[index] ?? SLOT;
+    });
+    const rowY = childYs.length ? Math.max(...childYs) : 0;
+    let childX = left + Math.max(0, (width - children) / 2);
+    for (let index = 0; index < (family.chil ?? []).length; index++) {
+      const id = family.chil![index];
+      if (!positions.has(id)) {
+        positions.set(id, { x: childX + (childWidths[index] ?? SLOT) / 2, y: rowY });
+      }
+      childX += childWidths[index] ?? SLOT;
+    }
+    const mid = left + width / 2;
+    const parentY = rowY + GENERATION_GAP;
+    const setParent = (id: string | undefined, parentX: number) => {
+      if (!id || positions.has(id)) return;
+      positions.set(id, { x: parentX, y: parentY });
+    };
+    if (family.husb && family.wife) {
+      setParent(family.husb, mid - SLOT / 2);
+      setParent(family.wife, mid + SLOT / 2);
+    } else {
+      setParent(family.husb ?? family.wife, mid);
+    }
+  };
+
+  const subtreeDepth = (family: Family, seen: Set<string>): number => {
+    if (seen.has(family.id)) return 0;
+    seen.add(family.id);
+    const childDepth = (family.chil ?? []).flatMap((id) => asParent(id)).map((child) => subtreeDepth(child, seen));
+    return 1 + (childDepth.length ? Math.max(...childDepth) : 0);
+  };
+
+  const roots = families.filter((family) => {
+    const parents = [family.husb, family.wife].filter((id): id is string => !!id);
+    return parents.every((id) => (generation.get(id) ?? 0) === 0);
   });
-  return positions;
+  const primary =
+    roots.reduce<Family | undefined>((best, family) => {
+      if (!best) return family;
+      return subtreeDepth(family, new Set()) > subtreeDepth(best, new Set()) ? family : best;
+    }, undefined) ?? families[0];
+  if (primary) placeFamily(primary, 0);
+
+  const attachBirthFamily = (personId: string) => {
+    const birth = families.find((family) => family.chil?.includes(personId) && !placedFamily.has(family.id));
+    const anchor = positions.get(personId);
+    if (!birth || !anchor) return;
+    placedFamily.add(birth.id);
+    const rowXs = (y: number) =>
+      [...positions.values()].filter((point) => point.y === y).map((point) => point.x);
+    let siblingX = anchor.x + SLOT;
+    for (const siblingId of birth.chil ?? []) {
+      if (siblingId === personId || positions.has(siblingId)) continue;
+      const taken = rowXs(anchor.y);
+      while (taken.some((x) => Math.abs(x - siblingX) < SLOT)) {
+        siblingX = Math.max(...taken) + SLOT;
+      }
+      positions.set(siblingId, { x: siblingX, y: anchor.y });
+      siblingX += SLOT;
+    }
+    const siblingXs = (birth.chil ?? [])
+      .map((id) => positions.get(id)?.x)
+      .filter((x): x is number => x !== undefined);
+    const mid = siblingXs.length ? (Math.min(...siblingXs) + Math.max(...siblingXs)) / 2 : anchor.x;
+    const parentY = anchor.y + GENERATION_GAP;
+    const coupleLeft = birth.husb && birth.wife ? mid - SLOT / 2 : mid;
+    const occupied = rowXs(parentY);
+    const blocked = occupied.some((x) => Math.abs(x - coupleLeft) < SLOT || (birth.wife && Math.abs(x - (coupleLeft + SLOT)) < SLOT));
+    const origin = blocked && occupied.length ? Math.max(...occupied) + SLOT : coupleLeft;
+    const setParent = (id: string | undefined, parentX: number) => {
+      if (!id || positions.has(id)) return;
+      positions.set(id, { x: parentX, y: parentY });
+    };
+    if (birth.husb && birth.wife) {
+      setParent(birth.husb, origin);
+      setParent(birth.wife, origin + SLOT);
+    } else {
+      setParent(birth.husb ?? birth.wife, origin);
+    }
+    if (birth.husb) attachBirthFamily(birth.husb);
+    if (birth.wife) attachBirthFamily(birth.wife);
+  };
+
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const id of [...positions.keys()]) {
+      const before = positions.size;
+      attachBirthFamily(id);
+      if (positions.size !== before) grew = true;
+    }
+  }
+
+  let cursor = Math.max(0, ...[...positions.values()].map((point) => point.x)) + SLOT * 2;
+  for (const family of families) {
+    if (placedFamily.has(family.id)) continue;
+    placeFamily(family, cursor);
+    cursor = Math.max(cursor, ...[...positions.values()].map((point) => point.x)) + SLOT * 2;
+  }
+  persons.forEach((person) => {
+    if (!positions.has(person.id)) {
+      positions.set(person.id, { x: cursor, y: 0 });
+      cursor += SLOT;
+    }
+  });
+
+  const spouseOf = new Map<string, string>();
+  for (const family of families) {
+    if (family.husb && family.wife) {
+      spouseOf.set(family.husb, family.wife);
+      spouseOf.set(family.wife, family.husb);
+    }
+  }
+  for (let guard = 0; guard < 40; guard++) {
+    let moved = false;
+    const rows = new Map<number, string[]>();
+    for (const [id, point] of positions) {
+      const row = rows.get(point.y) ?? [];
+      row.push(id);
+      rows.set(point.y, row);
+    }
+    for (const row of rows.values()) {
+      row.sort((a, b) => positions.get(a)!.x - positions.get(b)!.x || a.localeCompare(b));
+      for (let index = 1; index < row.length; index++) {
+        const previous = positions.get(row[index - 1])!;
+        const current = positions.get(row[index])!;
+        const gap = current.x - previous.x;
+        if (gap >= SLOT) continue;
+        if (spouseOf.get(row[index - 1]) === row[index]) continue;
+        const delta = SLOT - gap;
+        const move = new Set<string>([row[index]]);
+        const spouse = spouseOf.get(row[index]);
+        if (spouse && spouse !== row[index - 1]) move.add(spouse);
+        for (const otherId of row) {
+          if (positions.get(otherId)!.x > current.x + 0.01) move.add(otherId);
+        }
+        for (const id of move) positions.get(id)!.x += delta;
+        moved = true;
+        break;
+      }
+      if (moved) break;
+    }
+    if (!moved) break;
+  }
+
+  for (const family of families) {
+    const childPoints = (family.chil ?? [])
+      .map((id) => positions.get(id))
+      .filter((point): point is Point => !!point);
+    const left = positions.get(family.husb ?? "") ?? positions.get(family.wife ?? "");
+    const right = positions.get(family.wife ?? "") ?? left;
+    if (!left || !right) continue;
+    const barY = Math.round(left.y - 70);
+    const node: any = {
+      "#text": `${Math.round((left.x + right.x) / 2)},${barY}`,
+      Top: {
+        Left: `${Math.round(left.x)},${barY}`,
+        Right: `${Math.round(right.x === left.x ? left.x + 60 : right.x)},${barY}`,
+      },
+    };
+    if (childPoints.length > 1) {
+      const dropY = Math.round(childPoints[0].y + 50);
+      const xs = childPoints.map((point) => point.x).sort((a, b) => a - b);
+      node.Bottom = {
+        Left: `${Math.round(xs[0])},${dropY}`,
+        Right: `${Math.round(xs[xs.length - 1])},${dropY}`,
+      };
+    }
+    familyPositions.set(family.id, node);
+  }
+
+  return {
+    positions: new Map(
+      [...positions].map(([id, point]) => [id, `${Math.round(point.x)},${Math.round(point.y)}`])
+    ),
+    familyPositions,
+  };
 };
 
 function buildGenoProXml(
@@ -122,13 +350,13 @@ function buildGenoProXml(
   places: Place[],
   sources: Source[]
 ): any {
-  const positions = layoutPositions(persons, families);
-  const marriages = families.map((family) => ({
-    id: `marriage-${family.id}`,
-    family,
-    marriage: family.events?.find((event) => event.type === "MARR"),
-    divorce: family.events?.find((event) => event.type === "DIV"),
-  }));
+  const { positions, familyPositions } = layoutTree(persons, families);
+  const marriages = families.flatMap((family) => {
+    const marriage = family.events?.find((event) => event.type === "MARR");
+    const divorce = family.events?.find((event) => event.type === "DIV");
+    if (!marriage && !divorce) return [];
+    return [{ id: `marriage-${family.id}`, family, marriage, divorce }];
+  });
   const pedigree: any[] = [];
   families.forEach((family) => {
     if (family.husb) {
@@ -202,12 +430,15 @@ function buildGenoProXml(
       },
       Individuals: { Individual: individuals },
       Families: {
-        Family: families.map((family, index) => ({
-          "@_ID": family.id,
-          Position: `${index * 220},80`,
-          Unions: `marriage-${family.id}`,
-          ...(family.note ? { Comment: family.note } : {}),
-        })),
+        Family: families.map((family) => {
+          const married = marriages.some((item) => item.family.id === family.id);
+          return {
+            "@_ID": family.id,
+            Position: familyPositions.get(family.id) ?? "0,0",
+            ...(married ? { Relation: "Marriage", Unions: `marriage-${family.id}` } : {}),
+            ...(family.note ? { Comment: family.note } : {}),
+          };
+        }),
       },
       Marriages: {
         Marriage: marriages.map((item) => ({
