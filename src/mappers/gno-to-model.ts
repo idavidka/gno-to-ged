@@ -95,6 +95,23 @@ export function gnoToModel(xmlText: string): { persons: Person[]; families: Fami
     return { id, title, author, publication };
   });
 
+  const rawPictureNodes = rootObj.Pictures?.Picture;
+  const pictureCatalog = new Map<string, { id: string; file?: string; title?: string }>();
+  (Array.isArray(rawPictureNodes) ? rawPictureNodes : rawPictureNodes ? [rawPictureNodes] : []).forEach((item: any) => {
+    const id = item?.["@_ID"];
+    if (!id) return;
+    const path = item?.Path;
+    const file = typeof path === "string"
+      ? path
+      : path?.["@_Relative"] ?? path?.["#text"] ?? path?.Relative;
+    const title = typeof item?.Name === "string" ? item.Name : item?.Name?.["#text"];
+    pictureCatalog.set(id, {
+      id,
+      file: typeof file === "string" ? file.replace(/\\/g, "/") : undefined,
+      title,
+    });
+  });
+
   const persons: Person[] = rawIndividuals.map((node, idx) => {
     const id = node?.["@_ID"] ?? node?.["@_Id"] ?? node?.["@_id"] ?? `I${idx + 1}`;
     
@@ -185,11 +202,16 @@ export function gnoToModel(xmlText: string): { persons: Person[]; families: Fami
     });
 
     const pictureNodes = node?.Pictures?.Picture;
-    const pictures = (Array.isArray(pictureNodes) ? pictureNodes : pictureNodes ? [pictureNodes] : []).map((item: any, pictureIndex: number) => ({
+    const nestedPictures = (Array.isArray(pictureNodes) ? pictureNodes : pictureNodes ? [pictureNodes] : []).map((item: any, pictureIndex: number) => ({
       id: item?.["@_ID"] ?? `${id}-pic${pictureIndex + 1}`,
       file: item?.["@_File"] ?? item?.File ?? item?.Path?.["@_Relative"] ?? item?.Path?.Relative,
       title: item?.Title ?? item?.["@_Title"],
     }));
+    const pictureText = typeof node?.Pictures === "string" ? node.Pictures : node?.Pictures?.["#text"];
+    const referencedPictures = typeof pictureText === "string"
+      ? pictureText.split(/\s+/).filter(Boolean).map((pictureId: string) => pictureCatalog.get(pictureId) ?? { id: pictureId })
+      : [];
+    const pictures = referencedPictures.length ? referencedPictures : nestedPictures;
     const note = node?.Comment ?? node?.Note;
 
     return {

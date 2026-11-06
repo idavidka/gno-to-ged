@@ -1,5 +1,5 @@
 import { XMLBuilder } from "fast-xml-parser";
-import type { Family, Person, Place, Source } from "../model";
+import type { Family, Person, Picture, Place, Source } from "../model";
 import { GnoFormat } from "../types";
 
 function eventToNode(
@@ -404,18 +404,36 @@ function buildGenoProXml(
       }
     });
     if (extra.length) node.Events = { Event: extra };
-    if (person.pictures?.length) {
+    const pictureRefs = (person.pictures ?? []).filter((picture) => picture.file && !picture.file.startsWith("data:"));
+    if (pictureRefs.length) {
       node.Pictures = {
-        Picture: person.pictures.map((picture) => {
-          const item: any = { "@_ID": picture.id };
-          if (picture.file && !picture.file.startsWith("data:")) {
-            item.Path = { "@_Relative": picture.file };
-          }
-          return item;
-        }),
+        "@_Primary": pictureRefs[0].id,
+        "#text": pictureRefs.map((picture) => picture.id).join(" "),
       };
     }
     return node;
+  });
+
+  const pictureCatalog = new Map<string, Picture>();
+  persons.forEach((person) => {
+    person.pictures?.forEach((picture) => {
+      if (!picture.file || picture.file.startsWith("data:") || pictureCatalog.has(picture.id)) return;
+      pictureCatalog.set(picture.id, picture);
+    });
+  });
+  const pictures = [...pictureCatalog.values()].map((picture) => {
+    const fileName = picture.file!.split(/[/\\]/).pop() || picture.file!;
+    const relative = picture.file!.replace(/\//g, "\\");
+    return {
+      "@_ID": picture.id,
+      Path: {
+        "@_Relative": relative,
+        "@_FileUnique": fileName,
+        "@_Report": `pictures/${fileName}`,
+        "#text": relative,
+      },
+      ...(picture.title ? { Name: picture.title } : {}),
+    };
   });
 
   return {
@@ -448,6 +466,7 @@ function buildGenoProXml(
         })),
       },
       PedigreeLinks: { PedigreeLink: pedigree },
+      ...(pictures.length ? { Pictures: { Picture: pictures } } : {}),
       ...(places.length
         ? {
             Places: {
